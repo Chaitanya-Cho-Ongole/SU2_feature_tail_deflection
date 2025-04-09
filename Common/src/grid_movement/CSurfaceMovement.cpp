@@ -28,7 +28,6 @@
 #include "../../include/grid_movement/CSurfaceMovement.hpp"
 #include "../../include/toolboxes/C1DInterpolation.hpp"
 #include "../../include/toolboxes/geometry_toolbox.hpp"
-#include "vector_structure.hpp"
 
 CSurfaceMovement::CSurfaceMovement() : CGridMovement() {
   size = SU2_MPI::GetSize();
@@ -296,9 +295,17 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
             if (iLevel > 0) UpdateParametricCoord(geometry, config, FFDBox[iFFDBox], iFFDBox);
 
             /* Get the spanwise normal for winglet design */
-
+            
+            if (rank == MASTER_NODE)
+            {
+              std::cout <<"Computing spanwise normals...";
+            }
             getNormalVector(geometry, config, FFDBox[iFFDBox], iFFDBox, false);
 
+            if (rank == MASTER_NODE)
+            {
+              std::cout <<"done!";
+            }
             /*--- Apply the design variables to the control point position ---*/
             ApplyDesignVariables(geometry, config, FFDBox, iFFDBox);
 
@@ -1653,6 +1660,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     /* Double array to hold three (x,y,z) points at slice location */
     su2double Points[3][3];
 
+    /* Counter to find three (x,y,z) points at slice location */
     int found = 0;
 
     unsigned short iMarker, iDim;
@@ -1667,6 +1675,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
 
     for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++)
     {
+      if (found == 3) break;
       /*--- Get the marker index of the surface point ---*/
       iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
 
@@ -1693,31 +1702,41 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
       }
     }
 
+    /* Only compute normal if this rank found enough points */
     if (found < 3)
-    {
-        std::cout << "Not enough points found at desired slice location " << std::endl;
+    { 
+        return;
     }
 
-    // Create Vector3D objects for cross product
-    Vector3D p0(Points[0][0], Points[0][1], Points[0][2]);
-    Vector3D p1(Points[1][0], Points[1][1], Points[1][2]);
-    Vector3D p2(Points[2][0], Points[2][1], Points[2][2]);
+    su2double u[3], v[3], normal[3];
+    
+    for (iDim =0; iDim < 3; iDim++)
+    {
+      u[iDim] = Points[1][iDim] - Points[0][iDim];
+      v[iDim] = Points[2][iDim] - Points[0][iDim];
+    }
 
-    Vector3D u = p1 - p0;
-    Vector3D v = p2 - p0;
-    Vector3D normal = u ^ v;  // Cross product
-    su2double norm = normal.norm();
+
+    // Compute cross product: normal = u × v
+    normal[0] = u[1]*v[2] - u[2]*v[1];
+    normal[1] = u[2]*v[0] - u[0]*v[2];
+    normal[2] = u[0]*v[1] - u[1]*v[0];
+
+    // Normalize
+    su2double norm = sqrt(normal[0]*normal[0] + normal[1]*normal[1] + normal[2]*normal[2]);
 
     if (norm < EPS) 
     {
-      std::cout << "Degenerate normal vector at y = 10." << std::endl;
+       return;
     }
 
-    normal /= norm;
+    for (iDim = 0; iDim < 3; iDim++) 
+    {
+      normal[iDim] /= norm;
+    }
 
-   
-      std::cout << "Computed surface normal at y = 10: " 
-                << normal[0] << ", " << normal[1] << ", " << normal[2] << std::endl;
+    std::cout << "Rank " << rank << ": Normal at y = 10 is ("
+    << normal[0] << ", " << normal[1] << ", " << normal[2] << ")\n";
   }
 
 su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
