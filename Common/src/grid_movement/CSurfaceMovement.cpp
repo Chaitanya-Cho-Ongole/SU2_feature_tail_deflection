@@ -29,6 +29,7 @@
 #include "../../include/toolboxes/C1DInterpolation.hpp"
 #include "../../include/toolboxes/geometry_toolbox.hpp"
 
+
 CSurfaceMovement::CSurfaceMovement() : CGridMovement() {
   size = SU2_MPI::GetSize();
   rank = SU2_MPI::GetRank();
@@ -1677,16 +1678,16 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
 
     const su2double tolerance  = 1e-2;
 
+     /* Define arrays for storing data */
+    su2double stored_y[FFD_ypoints];
+    su2double stored_normals[FFD_ypoints][3];
+    int stored_count = 0;
+
     for (int j = 0; j < FFD_ypoints; ++j)
     { 
       /* Get current slice location */
       su2double target_y = FFD_ymin + j * dy;
 
-     
-      if (rank == 2)
-      {
-        std::cout << "j = " << j << ", target_y = " << target_y << std::endl;
-      }
       /* Double array to hold three (x,y,z) points near slice location */
       su2double Points[3][3];  
 
@@ -1725,8 +1726,9 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
       }
 
       /* Only compute normal if this rank found enough points */
-      if (found < 3) {
-        std::cout << "Rank " << rank << ": Not enough points near y = " << target_y << std::endl;
+      if (found < 3) 
+      {
+        //std::cout << "Rank " << rank << ": Not enough points near y = " << target_y << std::endl;
         continue;  // Skip this y-slice, but keep looping
       }
       
@@ -1759,10 +1761,31 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
         normal[iDim] /= norm;
       }
 
-      std::cout << ": Normal at y = " << target_y << " is ("
-      << normal[0] << ", " << normal[1] << ", " << normal[2] << ")\n";
+      stored_y[stored_count] = target_y;
+
+      for (iDim = 0; iDim < 3; iDim++)
+      {
+        stored_normals[stored_count][iDim] = normal[iDim];
+      }
+
+      stored_count++;
+
+      
+      //std::cout << ": Normal at y = " << target_y << " is ("
+      //<< normal[0] << ", " << normal[1] << ", " << normal[2] << ")\n";
     } // End loop over slice locations 
+
+      // Print all collected normals after the loop
+  std::cout << "\nSpanwise Normals (Rank " << rank << "):\n";
+  for (int i = 0; i < stored_count; ++i) 
+  {
+    std::cout << "y = " << stored_y[i]
+              << " -> Normal = (" << stored_normals[i][0]
+              << ", " << stored_normals[i][1]
+              << ", " << stored_normals[i][2] << ")\n";
   }
+}
+
 
 su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
                                               unsigned short iFFDBox, bool ResetDef) 
