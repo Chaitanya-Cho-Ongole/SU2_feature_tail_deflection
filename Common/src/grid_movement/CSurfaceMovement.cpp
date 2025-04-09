@@ -1657,6 +1657,19 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     /* Define a double array for current Cartesian coordinates */
     su2double CartCoord[3];
 
+    /* Get the Y-extent of the FFD bounding box */
+    su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
+    su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the sevent coordinate
+    unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1);
+
+    std::cout <<"Y_min: " << FFD_ymin << std::endl;
+    std::cout <<"Y_max: " << FFD_ymax << std::endl;
+    std::cout <<"FFD Y degree: " << FFD_ypoints << std::endl;
+
+    
+    //std::cout << config->GetCoordFFDBox(iFFDBox, 1) << std::endl;
+    //std::cout << config->GetCoordFFDBox(iFFDBox, 2) << std::endl;
+
     unsigned short iMarker, iDim;
     unsigned long iVertex, iPoint, iSurfacePoints;
 

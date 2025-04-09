@@ -92,15 +92,19 @@ void CDeformationDriver::PreprocessInput() {
    cases, nZone is equal to one. This represents the solution of a partial
    differential equation on a single block, unstructured mesh. ---*/
 
-  for (iZone = 0; iZone < nZone; iZone++) {
+  for (iZone = 0; iZone < nZone; iZone++) 
+  {
     /*--- Definition of the configuration option class for all zones. In this
      constructor, the input configuration file is parsed and all options are
      read and stored. ---*/
-
-    if (driver_config->GetnConfigFiles() > 0) {
+    
+    if (driver_config->GetnConfigFiles() > 0) 
+    {
       strcpy(zone_file_name, driver_config->GetConfigFilename(iZone).c_str());
       config_container[iZone] = new CConfig(driver_config, zone_file_name, SU2_COMPONENT::SU2_DEF, iZone, nZone, true);
-    } else {
+    }
+    else 
+    {  
       config_container[iZone] =
           new CConfig(driver_config, config_file_name, SU2_COMPONENT::SU2_DEF, iZone, nZone, true);
     }
@@ -110,8 +114,10 @@ void CDeformationDriver::PreprocessInput() {
 
   /*--- Set the multi-zone part of the problem. ---*/
 
-  if (driver_config->GetMultizone_Problem()) {
-    for (iZone = 0; iZone < nZone; iZone++) {
+  if (driver_config->GetMultizone_Problem()) 
+  {
+    for (iZone = 0; iZone < nZone; iZone++) 
+    {
       /*--- Set the interface markers for multi-zone. ---*/
 
       config_container[iZone]->SetMultizone(driver_config, config_container);
