@@ -1659,30 +1659,34 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
 
     /* Get the Y-extent of the FFD bounding box */
     su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
-    su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the sevent coordinate
-    unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1);
-
-    std::cout <<"Y_min: " << FFD_ymin << std::endl;
-    std::cout <<"Y_max: " << FFD_ymax << std::endl;
-    std::cout <<"FFD Y degree: " << FFD_ypoints << std::endl;
+    su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the seventh coordinate
+    unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1; // FFD degree Y + 1
 
     
-    //std::cout << config->GetCoordFFDBox(iFFDBox, 1) << std::endl;
-    //std::cout << config->GetCoordFFDBox(iFFDBox, 2) << std::endl;
+      std::cout <<"Y_min: " << FFD_ymin << std::endl;
+      std::cout <<"Y_max: " << FFD_ymax << std::endl;
+      std::cout <<"Slice points: " << FFD_ypoints << std::endl;
+    
 
     unsigned short iMarker, iDim;
     unsigned long iVertex, iPoint, iSurfacePoints;
 
     unsigned short nDim = geometry->GetnDim();
 
-    su2double target_y_list[3] = {5.0, 10.0, 15.0};
+    su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
+
     const su2double tolerance  = 1e-2;
 
-    for (int y_idx = 0; y_idx < 3; ++y_idx) 
+    for (int j = 0; j < FFD_ypoints; ++j)
     { 
       /* Get current slice location */
-      su2double target_y = target_y_list[y_idx];
+      su2double target_y = FFD_ymin + j * dy;
 
+     
+      if (rank == 2)
+      {
+        std::cout << "j = " << j << ", target_y = " << target_y << std::endl;
+      }
       /* Double array to hold three (x,y,z) points near slice location */
       su2double Points[3][3];  
 
@@ -1721,10 +1725,11 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
       }
 
       /* Only compute normal if this rank found enough points */
-      if (found < 3)
-      {  
-        return;
+      if (found < 3) {
+        std::cout << "Rank " << rank << ": Not enough points near y = " << target_y << std::endl;
+        continue;  // Skip this y-slice, but keep looping
       }
+      
 
       /* Initialize and compute tangent vectors for this slice location */
       su2double u[3], v[3], normal[3];
@@ -1754,7 +1759,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
         normal[iDim] /= norm;
       }
 
-      std::cout << "Rank " << rank << ": Normal at y = " << target_y << " is ("
+      std::cout << ": Normal at y = " << target_y << " is ("
       << normal[0] << ", " << normal[1] << ", " << normal[2] << ")\n";
     } // End loop over slice locations 
   }
