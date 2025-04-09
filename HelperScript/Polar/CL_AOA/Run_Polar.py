@@ -71,12 +71,10 @@ def modify_su2_config(input_file, output_file, TARGET_AOA, MACH, restart=False):
                 key, value = map(str.strip, stripped_line.split("=", 1))
                 if key == "MACH_NUMBER":
                     line = f"{key}= {MACH}\n"
-                elif key == "FIXED_CL_MODE":
-                    line = f"{key}= NO\n"
                 elif key == "AOA":
                     line = f"{key}= {TARGET_AOA}\n"
-                elif key == "RESTART_SOL":
-                    line = f"{key}= {'YES' if restart else 'NO'}\n"  # First CL = NO, others = YES
+                #elif key == "RESTART_SOL":
+                #    line = f"{key}= {'YES' if restart else 'NO'}\n"  # First CL = NO, others = YES
                 
             file.write(line)
 
@@ -166,7 +164,7 @@ def run_su2_simulation(num_cores, cfg_file, TARGET_AOA, MACH, restart=False, nex
         shutil.copy(modified_cfg, next_cfg)
 
         # Update RESTART_SOL=YES in the next CL directory before the next simulation
-        update_restart_config(next_cfg)
+        #update_restart_config(next_cfg)
 
     return log_file_path
 

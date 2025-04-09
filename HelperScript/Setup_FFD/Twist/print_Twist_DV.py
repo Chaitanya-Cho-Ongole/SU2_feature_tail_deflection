@@ -125,7 +125,7 @@ def print_sampled_points_corrected(sampled_points):
 # Run the explicit last-point handling function on the sampled points
 
 
-DV_DEGREE_Y = 8
+DV_DEGREE_Y = 16
 
 # Example usage:
 sampled_points = plot_xy_zy_planes_with_spline("QuarterChordCoords.csv", num_points = DV_DEGREE_Y+1)

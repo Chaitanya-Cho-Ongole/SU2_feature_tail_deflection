@@ -11,7 +11,7 @@ def print_decimal_values(count):
 
 if __name__ == "__main__":
     
-    count = 858
+    count = 594
     
     
     print(generate_ffd_string(count))

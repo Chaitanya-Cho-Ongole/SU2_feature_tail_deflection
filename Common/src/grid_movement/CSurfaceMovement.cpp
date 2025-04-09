@@ -2285,43 +2285,74 @@ bool CSurfaceMovement::SetFFDThickness_2D(CGeometry* geometry, CConfig* config, 
 }
 
 bool CSurfaceMovement::SetFFDCamber(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
-                                    CFreeFormDefBox** ResetFFDBox, unsigned short iDV, bool ResetDef) const {
+                                    CFreeFormDefBox** ResetFFDBox, unsigned short iDV, bool ResetDef) const 
+                                    {
+
+  /* This function is is responsible for modifying the camber (curvature) of a surface suing a FFD box, by moving points within the FFD box in the z-
+  direction (index 2). This can be useful for designing winglets. */     
+  
+  /* Initialize deformation amplitude and movement vector */
   su2double Ampl, movement[3] = {0.0, 0.0, 0.0};
   unsigned short index[3], kIndex, iPlane, iFFDBox;
   string design_FFDBox;
+
+  /* Get relaxation factor from config file */
   su2double Scale = config->GetOpt_RelaxFactor();
 
   /*--- Set control points to its original value (even if the
    design variable is not in this box) ---*/
 
-  if (ResetDef) {
+  if (ResetDef) 
+  {
     for (iFFDBox = 0; iFFDBox < nFFDBox; iFFDBox++) ResetFFDBox[iFFDBox]->SetOriginalControlPoints();
   }
 
+  /* Get the FFD tag */
   design_FFDBox = config->GetFFDTag(iDV);
 
-  if (design_FFDBox.compare(FFDBox->GetTag()) == 0) {
+  if (rank == MASTER_NODE)
+  {
+    std::cout <<"Current design FFD box: " << design_FFDBox <<std::endl;
+  }
+
+  /* Check if the current design variable (iDV) belongs to this FFD box */
+  if (design_FFDBox.compare(FFDBox->GetTag()) == 0) 
+  {
     /*--- Check that it is possible to move the control point ---*/
 
-    for (kIndex = 0; kIndex < 2; kIndex++) {
-      index[0] = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
-      index[1] = SU2_TYPE::Int(config->GetParamDV(iDV, 2));
+    for (kIndex = 0; kIndex < 2; kIndex++) 
+    {
+      index[0] = SU2_TYPE::Int(config->GetParamDV(iDV, 1)); // i ?  -> Confirm 
+      index[1] = SU2_TYPE::Int(config->GetParamDV(iDV, 2)); // j ?  -> Confirm
       index[2] = kIndex;
 
-      for (iPlane = 0; iPlane < FFDBox->Get_nFix_IPlane(); iPlane++) {
+      if (rank == MASTER_NODE)
+      {
+        std::cout << "DV indices:" <<std::endl;
+
+        std::cout << "index[0]:" << index[0] << std::endl;
+        std::cout << "index[1]:" << index[1] << std::endl;
+        std::cout << "index[2]:" << index[2] << std::endl;
+      }
+      
+      for (iPlane = 0; iPlane < FFDBox->Get_nFix_IPlane(); iPlane++) 
+      {
         if (index[0] == FFDBox->Get_Fix_IPlane(iPlane)) return false;
       }
 
-      for (iPlane = 0; iPlane < FFDBox->Get_nFix_JPlane(); iPlane++) {
+      for (iPlane = 0; iPlane < FFDBox->Get_nFix_JPlane(); iPlane++) 
+      {
         if (index[1] == FFDBox->Get_Fix_JPlane(iPlane)) return false;
       }
 
-      for (iPlane = 0; iPlane < FFDBox->Get_nFix_KPlane(); iPlane++) {
+      for (iPlane = 0; iPlane < FFDBox->Get_nFix_KPlane(); iPlane++) 
+      {
         if (index[2] == FFDBox->Get_Fix_KPlane(iPlane)) return false;
       }
     }
 
-    for (kIndex = 0; kIndex < 2; kIndex++) {
+    for (kIndex = 0; kIndex < 2; kIndex++) 
+    {
       Ampl = config->GetDV_Value(iDV) * Scale;
 
       index[0] = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
@@ -2338,7 +2369,9 @@ bool CSurfaceMovement::SetFFDCamber(CGeometry* geometry, CConfig* config, CFreeF
       FFDBox->SetControlPoints(index, movement);
     }
 
-  } else {
+  } 
+  else 
+  {
     return false;
   }
 
