@@ -275,6 +275,16 @@ class CSurfaceMovement : public CGridMovement {
                               bool ResetDef);
 
   /*!
+   * \brief Compute the normal vector for winglet design
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] FFDBox - Array with all the free forms FFDBoxes of the computation.
+   * \param[in] iFFDBox - Index of FFD box.
+   */
+  su2double getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
+    bool ResetDef);
+
+  /*!
    * \brief Set the deformation of the Free From box using the control point position.
    * \param[in] geometry - Geometrical definition of the problem.
    * \param[in] config - Definition of the particular problem.

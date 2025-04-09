@@ -1,7 +1,7 @@
 /*!
  * \file CSurfaceMovement.cpp
  * \brief Subroutines for moving mesh surface elements
- * \author F. Palacios, T. Economon, S. Padron
+ * \author F. Palacios, T. Economon, S. Padron, P.Rajan
  * \version 8.0.1 "Harrier"
  *
  * SU2 Project Website: https://su2code.github.io
@@ -40,7 +40,8 @@ CSurfaceMovement::CSurfaceMovement() : CGridMovement() {
 
 CSurfaceMovement::~CSurfaceMovement() = default;
 
-vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* geometry, CConfig* config) {
+vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* geometry, CConfig* config) 
+{
   unsigned short iFFDBox, iDV, iLevel, iChild, iParent, jFFDBox, iMarker;
   unsigned short Degree_Unitary[] = {1, 1, 1}, BSpline_Unitary[] = {2, 2, 2};
   su2double MaxDiff, Current_Scale, Ratio, New_Scale;
@@ -164,40 +165,47 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
       (config->GetDesign_Variable(0) == FFD_NACELLE) || (config->GetDesign_Variable(0) == FFD_GULL) ||
       (config->GetDesign_Variable(0) == FFD_TWIST) || (config->GetDesign_Variable(0) == FFD_ROTATION) ||
       (config->GetDesign_Variable(0) == FFD_CONTROL_SURFACE) || (config->GetDesign_Variable(0) == FFD_CAMBER) ||
-      (config->GetDesign_Variable(0) == FFD_THICKNESS) || (config->GetDesign_Variable(0) == FFD_ANGLE_OF_ATTACK)) {
-    /*--- Definition of the FFD deformation class ---*/
+      (config->GetDesign_Variable(0) == FFD_THICKNESS) || (config->GetDesign_Variable(0) == FFD_ANGLE_OF_ATTACK)) 
+      
+      {
+      /*--- Definition of the FFD deformation class ---*/
 
-    FFDBox = new CFreeFormDefBox*[MAX_NUMBER_FFD];
+      FFDBox = new CFreeFormDefBox*[MAX_NUMBER_FFD];
 
-    /*--- Read the FFD information from the grid file ---*/
+      /*--- Read the FFD information from the grid file ---*/
 
-    ReadFFDInfo(geometry, config, FFDBox, config->GetMesh_FileName());
+      ReadFFDInfo(geometry, config, FFDBox, config->GetMesh_FileName());
 
-    /*--- If there is a FFDBox in the input file ---*/
+      /*--- If there is a FFDBox in the input file ---*/
 
-    if (nFFDBox != 0) {
-      /*--- If the FFDBox was not defined in the input file ---*/
+      if (nFFDBox != 0) 
+      {
+        /*--- If the FFDBox was not defined in the input file ---*/
 
-      if (!GetFFDBoxDefinition()) {
-        SU2_MPI::Error(
+        if (!GetFFDBoxDefinition()) 
+        {
+          SU2_MPI::Error(
             string("There is not FFD box definition in the mesh file,\n") + string("run DV_KIND=FFD_SETTING first !!"),
             CURRENT_FUNCTION);
-      }
+        }
 
-      /* --- Check if the FFD boxes referenced in the design variable definition can be found --- */
+        /* --- Check if the FFD boxes referenced in the design variable definition can be found --- */
 
-      for (iDV = 0; iDV < config->GetnDV(); iDV++) {
-        if (!CheckFFDBoxDefinition(config, iDV)) {
-          SU2_MPI::Error(string("There is no FFD box with tag \"") + config->GetFFDTag(iDV) +
+        for (iDV = 0; iDV < config->GetnDV(); iDV++) 
+        {
+          if (!CheckFFDBoxDefinition(config, iDV)) 
+          {
+            SU2_MPI::Error(string("There is no FFD box with tag \"") + config->GetFFDTag(iDV) +
                              string("\" defined in the mesh file.\n") +
                              string("Check the definition of the design variables and/or the FFD settings !!"),
                          CURRENT_FUNCTION);
+          }
         }
-      }
 
       /*--- Check that the user has specified a non-zero number of surfaces to move with DV_MARKER. ---*/
 
-      if (config->GetnMarker_DV() == 0) {
+      if (config->GetnMarker_DV() == 0) 
+      {
         SU2_MPI::Error(string("No markers are specified in DV_MARKER, so no deformation will occur.\n") +
                            string("List markers to be deformed in DV_MARKER."),
                        CURRENT_FUNCTION);
@@ -205,7 +213,8 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
 
       /*--- Output original FFD FFDBox ---*/
 
-      if ((rank == MASTER_NODE) && (config->GetKind_SU2() != SU2_COMPONENT::SU2_DOT)) {
+      if ((rank == MASTER_NODE) && (config->GetKind_SU2() != SU2_COMPONENT::SU2_DOT)) 
+      {
         for (unsigned short iFile = 0; iFile < config->GetnVolumeOutputFiles(); iFile++) {
           auto FileFormat = config->GetVolumeOutputFiles();
 
@@ -249,13 +258,16 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
 
       /*--- Loop over all the FFD boxes levels ---*/
 
-      for (iLevel = 0; iLevel < GetnLevel(); iLevel++) {
+      for (iLevel = 0; iLevel < GetnLevel(); iLevel++) 
+      {
         /*--- Loop over all FFD FFDBoxes ---*/
 
-        for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) {
+        for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) 
+        {
           /*--- Check the level of the FFD box ---*/
 
-          if (FFDBox[iFFDBox]->GetLevel() == iLevel) {
+          if (FFDBox[iFFDBox]->GetLevel() == iLevel) 
+          {
             /*--- Check the dimension of the FFD compared with the design variables ---*/
 
             if (rank == MASTER_NODE) cout << "Checking FFD box dimension." << endl;
@@ -270,7 +282,8 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
             /*--- Compute the parametric coordinates of the child box
              control points (using the parent FFDBox)  ---*/
 
-            for (iChild = 0; iChild < FFDBox[iFFDBox]->GetnChildFFDBox(); iChild++) {
+            for (iChild = 0; iChild < FFDBox[iFFDBox]->GetnChildFFDBox(); iChild++) 
+            {
               FFDBoxTag = FFDBox[iFFDBox]->GetChildFFDBoxTag(iChild);
               for (jFFDBox = 0; jFFDBox < GetnFFDBox(); jFFDBox++)
                 if (FFDBoxTag == FFDBox[jFFDBox]->GetTag()) break;
@@ -689,7 +702,7 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
   }
 
   return totaldeformation;
-}
+} // End SetSurface_Deformatiion
 
 void CSurfaceMovement::SetSurface_Derivative(CGeometry* geometry, CConfig* config) {
   su2double DV_Value = 0.0;
@@ -1527,7 +1540,9 @@ void CSurfaceMovement::UpdateParametricCoord(CGeometry* geometry, CConfig* confi
        with the previous deformation ---*/
 
       var_coord = geometry->vertex[iMarker][iVertex]->GetVarCoord();
+
       CartCoordOld = geometry->nodes->GetCoord(iPoint);
+
       for (iDim = 0; iDim < 3; iDim++) CartCoord[iDim] = CartCoordOld[iDim] + var_coord[iDim];
       FFDBox->Set_CartesianCoord(CartCoord, iSurfacePoints);
 
@@ -1623,8 +1638,45 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
   }
 }
 
+
+su2double CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
+  unsigned short iFFDBox, bool ResetDef) 
+  {
+
+    /* Define a double array for current Cartesian coordinates */
+    su2double *CartCoordCurrent;
+
+    unsigned short iMarker, iDim;
+    unsigned long iVertex, iPoint, iSurfacePoints;
+
+    unsigned short nDim = geometry->GetnDim();
+
+    /*--- Compute the cartesians coordinates ---*/
+
+    for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++)
+    {
+      /*--- Get the marker index of the surface point ---*/
+      iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
+
+      if (config->GetMarker_All_DV(iMarker) == YES)
+      {
+        /*--- Get the vertex of the surface point ---*/
+        iVertex = FFDBox->Get_VertexIndex(iSurfacePoints);
+        iPoint = FFDBox->Get_PointIndex(iSurfacePoints);
+
+        /* Get the curent cartersian coordinates of the surface point ---*/
+        for (iDim = 0; iDim < nDim; iDim++)
+        {
+          CartCoordCurrent[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
+        }
+      }
+
+    }
+  }
+
 su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
-                                              unsigned short iFFDBox, bool ResetDef) {
+                                              unsigned short iFFDBox, bool ResetDef) 
+                                              {
   su2double *CartCoordNew, Diff, my_MaxDiff = 0.0, MaxDiff, *ParamCoord, VarCoord[3] = {0.0, 0.0, 0.0},
                                  CartCoordOld[3] = {0.0, 0.0, 0.0};
   unsigned short iMarker, iDim;
@@ -1638,9 +1690,12 @@ su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* conf
   /*--- Set to zero all the porints in VarCoord, this is important when we are dealing with different boxes
     because a loop over GetnSurfacePoint is no sufficient ---*/
 
-  if (ResetDef) {
-    for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
-      for (iVertex = 0; iVertex < geometry->nVertex[iMarker]; iVertex++) {
+  if (ResetDef) 
+  {
+    for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) 
+    {
+      for (iVertex = 0; iVertex < geometry->nVertex[iMarker]; iVertex++) 
+      {
         geometry->vertex[iMarker][iVertex]->SetVarCoord(VarCoord);
       }
     }
@@ -1648,14 +1703,17 @@ su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* conf
 
   /*--- Recompute the cartesians coordinates ---*/
 
-  for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++) {
+  for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++) 
+  {
+
     /*--- Get the marker of the surface point ---*/
 
     iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
 
-    if (config->GetMarker_All_DV(iMarker) == YES) {
-      /*--- Get the vertex of the surface point ---*/
+    if (config->GetMarker_All_DV(iMarker) == YES) 
+    {
 
+      /*--- Get the vertex of the surface point ---*/
       iVertex = FFDBox->Get_VertexIndex(iSurfacePoints);
       iPoint = FFDBox->Get_PointIndex(iSurfacePoints);
 
@@ -1666,6 +1724,7 @@ su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* conf
       /*--- Get the parametric coordinate of the surface point ---*/
 
       ParamCoord = FFDBox->Get_ParametricCoord(iSurfacePoints);
+
 
       /*--- Compute the new cartesian coordinate, and set the value in
        the FFDBox structure ---*/
@@ -1707,7 +1766,8 @@ su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* conf
 
       /*--- Get the original cartesian coordinates of the surface point ---*/
 
-      for (iDim = 0; iDim < nDim; iDim++) {
+      for (iDim = 0; iDim < nDim; iDim++) 
+      {
         CartCoordOld[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
       }
 
@@ -2322,9 +2382,9 @@ bool CSurfaceMovement::SetFFDCamber(CGeometry* geometry, CConfig* config, CFreeF
 
     for (kIndex = 0; kIndex < 2; kIndex++) 
     {
-      index[0] = SU2_TYPE::Int(config->GetParamDV(iDV, 1)); // i ?  -> Confirm 
-      index[1] = SU2_TYPE::Int(config->GetParamDV(iDV, 2)); // j ?  -> Confirm
-      index[2] = kIndex;
+      index[0] = SU2_TYPE::Int(config->GetParamDV(iDV, 1)); // i 
+      index[1] = SU2_TYPE::Int(config->GetParamDV(iDV, 2)); // j 
+      index[2] = kIndex;  // k set k index as 0,1 to move points at z = 0, z = 1 in parametric space
 
       if (rank == MASTER_NODE)
       {
@@ -2334,7 +2394,8 @@ bool CSurfaceMovement::SetFFDCamber(CGeometry* geometry, CConfig* config, CFreeF
         std::cout << "index[1]:" << index[1] << std::endl;
         std::cout << "index[2]:" << index[2] << std::endl;
       }
-      
+
+      /* Verify that extracted indices can be moved */
       for (iPlane = 0; iPlane < FFDBox->Get_nFix_IPlane(); iPlane++) 
       {
         if (index[0] == FFDBox->Get_Fix_IPlane(iPlane)) return false;
@@ -2361,11 +2422,14 @@ bool CSurfaceMovement::SetFFDCamber(CGeometry* geometry, CConfig* config, CFreeF
 
       movement[0] = 0.0;
       movement[1] = 0.0;
+
+      /* Move the +- zindices together based on Amplitude */
       if (kIndex == 0)
         movement[2] = Ampl;
       else
         movement[2] = Ampl;
 
+        /* FFD control points displced, now move the mesh surface.*/
       FFDBox->SetControlPoints(index, movement);
     }
 

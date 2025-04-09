@@ -263,7 +263,9 @@ class CFreeFormDefBox : public CGridMovement {
   /*!
    * \brief Get number of surface points.
    */
-  inline unsigned long GetnSurfacePoint(void) const { return PointIndex.size(); }
+  inline unsigned long GetnSurfacePoint(void) const {
+     return PointIndex.size(); 
+    }
 
   /*!
    * \brief Get number of parent FFD boxes.
@@ -452,7 +454,8 @@ class CFreeFormDefBox : public CGridMovement {
    * \param[in] val_index - Local index (i, j, k) of the control point.
    * \param[in] movement - Movement of the control point.
    */
-  inline void SetControlPoints(const unsigned short* val_index, const su2double* movement) {
+  inline void SetControlPoints(const unsigned short* val_index, const su2double* movement) 
+  {
     for (unsigned short iDim = 0; iDim < nDim; iDim++)
       Coord_Control_Points[val_index[0]][val_index[1]][val_index[2]][iDim] += movement[iDim];
   }
