@@ -281,7 +281,7 @@ class CSurfaceMovement : public CGridMovement {
    * \param[in] FFDBox - Array with all the free forms FFDBoxes of the computation.
    * \param[in] iFFDBox - Index of FFD box.
    */
-  su2double getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
+  void getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
     bool ResetDef);
 
   /*!

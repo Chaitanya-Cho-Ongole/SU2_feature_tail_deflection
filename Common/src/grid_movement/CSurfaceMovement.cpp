@@ -28,6 +28,7 @@
 #include "../../include/grid_movement/CSurfaceMovement.hpp"
 #include "../../include/toolboxes/C1DInterpolation.hpp"
 #include "../../include/toolboxes/geometry_toolbox.hpp"
+#include "vector_structure.hpp"
 
 CSurfaceMovement::CSurfaceMovement() : CGridMovement() {
   size = SU2_MPI::GetSize();
@@ -293,6 +294,10 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
             /*--- Update the parametric coordinates if it is a child FFDBox ---*/
 
             if (iLevel > 0) UpdateParametricCoord(geometry, config, FFDBox[iFFDBox], iFFDBox);
+
+            /* Get the spanwise normal for winglet design */
+
+            getNormalVector(geometry, config, FFDBox[iFFDBox], iFFDBox, false);
 
             /*--- Apply the design variables to the control point position ---*/
             ApplyDesignVariables(geometry, config, FFDBox, iFFDBox);
@@ -1639,17 +1644,24 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
 }
 
 
-su2double CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
+void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
   unsigned short iFFDBox, bool ResetDef) 
-  {
-
+  { 
     /* Define a double array for current Cartesian coordinates */
-    su2double *CartCoordCurrent;
+    su2double CartCoord[3];
+
+    /* Double array to hold three (x,y,z) points at slice location */
+    su2double Points[3][3];
+
+    int found = 0;
 
     unsigned short iMarker, iDim;
     unsigned long iVertex, iPoint, iSurfacePoints;
 
     unsigned short nDim = geometry->GetnDim();
+
+    const su2double target_y = 10.0;
+    const su2double tolerance  = 1e-2;
 
     /*--- Compute the cartesians coordinates ---*/
 
@@ -1667,11 +1679,45 @@ su2double CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config
         /* Get the curent cartersian coordinates of the surface point ---*/
         for (iDim = 0; iDim < nDim; iDim++)
         {
-          CartCoordCurrent[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
+          CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
+        }
+
+        if (fabs(CartCoord[1]- target_y) < tolerance)
+        {
+          for (iDim = 0; iDim < 3; iDim++)
+          {
+            Points[found][iDim] = CartCoord[iDim];
+          }
+          found ++;
         }
       }
-
     }
+
+    if (found < 3)
+    {
+        std::cout << "Not enough points found at desired slice location " << std::endl;
+    }
+
+    // Create Vector3D objects for cross product
+    Vector3D p0(Points[0][0], Points[0][1], Points[0][2]);
+    Vector3D p1(Points[1][0], Points[1][1], Points[1][2]);
+    Vector3D p2(Points[2][0], Points[2][1], Points[2][2]);
+
+    Vector3D u = p1 - p0;
+    Vector3D v = p2 - p0;
+    Vector3D normal = u ^ v;  // Cross product
+    su2double norm = normal.norm();
+
+    if (norm < EPS) 
+    {
+      std::cout << "Degenerate normal vector at y = 10." << std::endl;
+    }
+
+    normal /= norm;
+
+   
+      std::cout << "Computed surface normal at y = 10: " 
+                << normal[0] << ", " << normal[1] << ", " << normal[2] << std::endl;
   }
 
 su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
