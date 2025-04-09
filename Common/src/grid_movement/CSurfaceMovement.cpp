@@ -304,7 +304,7 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
 
             if (rank == MASTER_NODE)
             {
-              std::cout <<"done!";
+              std::cout <<"done!\n";
             }
             /*--- Apply the design variables to the control point position ---*/
             ApplyDesignVariables(geometry, config, FFDBox, iFFDBox);
@@ -1657,86 +1657,93 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     /* Define a double array for current Cartesian coordinates */
     su2double CartCoord[3];
 
-    /* Double array to hold three (x,y,z) points at slice location */
-    su2double Points[3][3];
-
-    /* Counter to find three (x,y,z) points at slice location */
-    int found = 0;
-
     unsigned short iMarker, iDim;
     unsigned long iVertex, iPoint, iSurfacePoints;
 
     unsigned short nDim = geometry->GetnDim();
 
-    const su2double target_y = 10.0;
+    su2double target_y_list[3] = {5.0, 10.0, 15.0};
     const su2double tolerance  = 1e-2;
 
-    /*--- Compute the cartesians coordinates ---*/
+    for (int y_idx = 0; y_idx < 3; ++y_idx) 
+    { 
+      /* Get current slice location */
+      su2double target_y = target_y_list[y_idx];
 
-    for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++)
-    {
-      if (found == 3) break;
-      /*--- Get the marker index of the surface point ---*/
-      iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
+      /* Double array to hold three (x,y,z) points near slice location */
+      su2double Points[3][3];  
 
-      if (config->GetMarker_All_DV(iMarker) == YES)
+      /* Counter to find three (x,y,z) points at slice location */
+      int found = 0;
+
+      /*--- Compute the cartesians coordinates ---*/
+      for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++)
       {
-        /*--- Get the vertex of the surface point ---*/
-        iVertex = FFDBox->Get_VertexIndex(iSurfacePoints);
-        iPoint = FFDBox->Get_PointIndex(iSurfacePoints);
+        if (found == 3) break;
 
-        /* Get the curent cartersian coordinates of the surface point ---*/
-        for (iDim = 0; iDim < nDim; iDim++)
-        {
-          CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
-        }
+        /*--- Get the marker index of the surface point ---*/
+        iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
 
-        if (fabs(CartCoord[1]- target_y) < tolerance)
+        if (config->GetMarker_All_DV(iMarker) == YES)
         {
-          for (iDim = 0; iDim < 3; iDim++)
+          /*--- Get the vertex of the surface point ---*/
+          iVertex = FFDBox->Get_VertexIndex(iSurfacePoints);
+          iPoint = FFDBox->Get_PointIndex(iSurfacePoints);
+
+          /* Get the curent cartersian coordinates of the surface point ---*/
+          for (iDim = 0; iDim < nDim; iDim++)
           {
-            Points[found][iDim] = CartCoord[iDim];
+            CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
           }
-          found ++;
+
+          if (fabs(CartCoord[1]- target_y) < tolerance)
+          {
+            for (iDim = 0; iDim < 3; iDim++)
+            {
+              Points[found][iDim] = CartCoord[iDim];
+            }
+            found ++;
+          }
         }
       }
-    }
 
-    /* Only compute normal if this rank found enough points */
-    if (found < 3)
-    { 
+      /* Only compute normal if this rank found enough points */
+      if (found < 3)
+      {  
         return;
-    }
+      }
 
-    su2double u[3], v[3], normal[3];
+      /* Initialize and compute tangent vectors for this slice location */
+      su2double u[3], v[3], normal[3];
     
-    for (iDim =0; iDim < 3; iDim++)
-    {
-      u[iDim] = Points[1][iDim] - Points[0][iDim];
-      v[iDim] = Points[2][iDim] - Points[0][iDim];
-    }
+      for (iDim =0; iDim < 3; iDim++)
+      {
+        u[iDim] = Points[1][iDim] - Points[0][iDim];
+        v[iDim] = Points[2][iDim] - Points[0][iDim];
+      }
 
 
-    // Compute cross product: normal = u × v
-    normal[0] = u[1]*v[2] - u[2]*v[1];
-    normal[1] = u[2]*v[0] - u[0]*v[2];
-    normal[2] = u[0]*v[1] - u[1]*v[0];
+      // Compute cross product: normal = u × v
+      normal[0] = u[1]*v[2] - u[2]*v[1];
+      normal[1] = u[2]*v[0] - u[0]*v[2];
+      normal[2] = u[0]*v[1] - u[1]*v[0];
 
-    // Normalize
-    su2double norm = sqrt(normal[0]*normal[0] + normal[1]*normal[1] + normal[2]*normal[2]);
+      // Normalize
+      su2double norm = sqrt(normal[0]*normal[0] + normal[1]*normal[1] + normal[2]*normal[2]);
 
-    if (norm < EPS) 
-    {
+      if (norm < EPS) 
+      {
        return;
-    }
+      }
 
-    for (iDim = 0; iDim < 3; iDim++) 
-    {
-      normal[iDim] /= norm;
-    }
+      for (iDim = 0; iDim < 3; iDim++) 
+      {
+        normal[iDim] /= norm;
+      }
 
-    std::cout << "Rank " << rank << ": Normal at y = 10 is ("
-    << normal[0] << ", " << normal[1] << ", " << normal[2] << ")\n";
+      std::cout << "Rank " << rank << ": Normal at y = " << target_y << " is ("
+      << normal[0] << ", " << normal[1] << ", " << normal[2] << ")\n";
+    } // End loop over slice locations 
   }
 
 su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
