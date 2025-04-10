@@ -28,7 +28,7 @@
 #include "../../include/grid_movement/CSurfaceMovement.hpp"
 #include "../../include/toolboxes/C1DInterpolation.hpp"
 #include "../../include/toolboxes/geometry_toolbox.hpp"
-
+#include <fstream>
 
 CSurfaceMovement::CSurfaceMovement() : CGridMovement() {
   size = SU2_MPI::GetSize();
@@ -1655,6 +1655,15 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
 void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
   unsigned short iFFDBox, bool ResetDef) 
 { 
+
+  if (rank == MASTER_NODE)
+  {
+    std::cout <<"Number of DV markers" << config->GetnMarker_DV() << std::endl;
+    std::cout <<"Numeber of vertices on wing: "<< geometry->GetnVertex(4) << std::endl;
+  }
+
+
+
   su2double CartCoord[3];
 
   su2double FFD_ymin = config->GetCoordFFDBox(iFFDBox, 1);  // y-min
@@ -1669,12 +1678,26 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   unsigned long iVertex, iPoint, iSurfacePoints;
   unsigned short nDim = geometry->GetnDim();
 
+  unsigned long num_coords = 0;
+  for (iVertex = 0; iVertex < geometry->GetnVertex(4); iVertex++)
+  {
+    iPoint = geometry->vertex[4][iVertex]->GetNode();
+    //std::cout <<"X-coordinate:" << geometry->nodes->GetCoord(iPoint, 0) << std::endl;
+    num_coords  = num_coords + 1;
+  }
+
+  std::cout << "Number of coordinates along x: " << num_coords << std::endl;
+
   su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
   const su2double tolerance = 1e-2;
 
   su2double stored_y[FFD_ypoints];
   su2double stored_normals[FFD_ypoints][3];
   int stored_count = 0;
+
+  // Open CSV file for writing
+  std::ofstream csv_file("candidate_points.csv");
+  csv_file << "X,Y,Z\n";  // CSV header
 
   for (int j = 0; j < FFD_ypoints; ++j)
   { 
@@ -1685,21 +1708,31 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     int num_candidates = 0;
 
     /* Collect candidate points near target_y */
-    for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++) {
+    for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++) 
+    {
       iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
 
-      if (config->GetMarker_All_DV(iMarker) == YES) {
+      if (config->GetMarker_All_DV(iMarker) == YES) 
+      {
         iVertex = FFDBox->Get_VertexIndex(iSurfacePoints);
         iPoint = FFDBox->Get_PointIndex(iSurfacePoints);
 
-        for (iDim = 0; iDim < nDim; iDim++) {
+        for (iDim = 0; iDim < nDim; iDim++) 
+        {
           CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
         }
 
-        if (fabs(CartCoord[1] - target_y) < tolerance && num_candidates < max_candidates) {
-          for (iDim = 0; iDim < 3; iDim++) {
+        if (fabs(CartCoord[1] - target_y) < tolerance && num_candidates < max_candidates) 
+        {
+          for (iDim = 0; iDim < 3; iDim++) 
+          {
             Candidates[num_candidates][iDim] = CartCoord[iDim];
           }
+
+          // Write candidate point to CSV
+          csv_file << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
+
+
           num_candidates++;
         }
       }
@@ -1761,6 +1794,9 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
 
     stored_count++;
   }
+
+    /* Close the CSV file */
+    csv_file.close();
 
   std::cout << "\nSpanwise Normals (Rank " << rank << "):\n";
   for (int i = 0; i < stored_count; ++i) {

@@ -86,7 +86,10 @@ void CDeformationDriver::PreprocessInput() {
 
   /*--- Initialize containers. --- */
 
+
+
   InitializeContainers();
+
 
   /*--- Loop over all zones to initialize the various classes. In most
    cases, nZone is equal to one. This represents the solution of a partial
@@ -109,6 +112,8 @@ void CDeformationDriver::PreprocessInput() {
           new CConfig(driver_config, config_file_name, SU2_COMPONENT::SU2_DEF, iZone, nZone, true);
     }
 
+
+
     config_container[iZone]->SetMPICommunicator(SU2_MPI::GetComm());
   }
 
@@ -129,15 +134,19 @@ void CDeformationDriver::PreprocessInput() {
   main_config = config_container[ZONE_0];
 }
 
-void CDeformationDriver::InitializeGeometry() {
-  for (iZone = 0; iZone < nZone; iZone++) {
+void CDeformationDriver::InitializeGeometry() 
+{
+  for (iZone = 0; iZone < nZone; iZone++) 
+  {
     /*--- Definition of the geometry class to store the primal grid in the partitioning process. ---*/
 
     CGeometry* geometry_aux = nullptr;
 
+
     /*--- All ranks process the grid and call ParMETIS for partitioning. ---*/
 
     geometry_aux = new CPhysicalGeometry(config_container[iZone], iZone, nZone);
+    
 
     /*--- Color the initial grid and set the send-receive domains (ParMETIS). ---*/
 

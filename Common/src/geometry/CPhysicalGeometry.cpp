@@ -59,6 +59,7 @@ CPhysicalGeometry::CPhysicalGeometry() : CGeometry() {}
 
 CPhysicalGeometry::CPhysicalGeometry(CConfig* config, unsigned short val_iZone, unsigned short val_nZone)
     : CGeometry() {
+
   edgeColorGroupSize = config->GetEdgeColoringGroupSize();
 
   string text_line, Marker_Tag;
@@ -73,15 +74,21 @@ CPhysicalGeometry::CPhysicalGeometry(CConfig* config, unsigned short val_iZone, 
   unsigned short val_format = config->GetMesh_FileFormat();
 
   /*--- Determine whether or not a FEM discretization is used ---*/
-
+  
   const bool fem_solver = config->GetFEMSolver();
+
+
 
   /*--- Initialize counters for local/global points & elements ---*/
 
-  if (fem_solver) {
-    switch (val_format) {
+  if (fem_solver)
+   {
+    switch (val_format) 
+    {
       case SU2:
+
         Read_SU2_Format_Parallel_FEM(config, val_mesh_filename, val_iZone, val_nZone);
+
         break;
 
       case CGNS_GRID:
@@ -3435,6 +3442,8 @@ void CPhysicalGeometry::Read_Mesh_FVM(CConfig* config, const string& val_mesh_fi
                                       unsigned short val_nZone) {
   /*--- Initialize counters for local/global points & elements ---*/
 
+
+
   Global_nPoint = 0;
   Global_nPointDomain = 0;
   Global_nElem = 0;
@@ -3524,7 +3533,6 @@ void CPhysicalGeometry::Read_Mesh_FVM(CConfig* config, const string& val_mesh_fi
   /*--- Prepare the nodal adjacency structures for ParMETIS. ---*/
 
   PrepareAdjacency(config);
-
   /*--- Now that we have loaded all information from the mesh,
    delete the mesh reader object. ---*/
 

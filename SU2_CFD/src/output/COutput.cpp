@@ -1586,7 +1586,8 @@ void COutput::LoadDataIntoSorter(CConfig* config, CGeometry* geometry, CSolver**
   curGetFieldIndex = 0;
   fieldGetIndexCache.clear();
 
-  if (femOutput){
+  if (femOutput)
+  {
 
     /*--- Create an object of the class CMeshFEM_DG and retrieve the necessary
      geometrical information for the FEM DG solver. ---*/
@@ -1612,7 +1613,9 @@ void COutput::LoadDataIntoSorter(CConfig* config, CGeometry* geometry, CSolver**
       }
     }
 
-  } else {
+  } 
+  else 
+  {
 
     for (iPoint = 0; iPoint < geometry->GetnPointDomain(); iPoint++) {
 
