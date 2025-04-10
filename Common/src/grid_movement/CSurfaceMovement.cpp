@@ -1654,137 +1654,123 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
 
 void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
   unsigned short iFFDBox, bool ResetDef) 
+{ 
+  su2double CartCoord[3];
+
+  su2double FFD_ymin = config->GetCoordFFDBox(iFFDBox, 1);  // y-min
+  su2double FFD_ymax = config->GetCoordFFDBox(iFFDBox, 7);  // y-max
+  unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
+
+  std::cout << "Y_min: " << FFD_ymin << std::endl;
+  std::cout << "Y_max: " << FFD_ymax << std::endl;
+  std::cout << "Slice points: " << FFD_ypoints << std::endl;
+
+  unsigned short iMarker, iDim;
+  unsigned long iVertex, iPoint, iSurfacePoints;
+  unsigned short nDim = geometry->GetnDim();
+
+  su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
+  const su2double tolerance = 1e-2;
+
+  su2double stored_y[FFD_ypoints];
+  su2double stored_normals[FFD_ypoints][3];
+  int stored_count = 0;
+
+  for (int j = 0; j < FFD_ypoints; ++j)
   { 
-    /* Define a double array for current Cartesian coordinates */
-    su2double CartCoord[3];
+    su2double target_y = FFD_ymin + j * dy;
 
-    /* Get the Y-extent of the FFD bounding box */
-    su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
-    su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the seventh coordinate
-    unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1; // FFD degree Y + 1
+    const int max_candidates = 100;
+    su2double Candidates[max_candidates][3];
+    int num_candidates = 0;
 
-    
-      std::cout <<"Y_min: " << FFD_ymin << std::endl;
-      std::cout <<"Y_max: " << FFD_ymax << std::endl;
-      std::cout <<"Slice points: " << FFD_ypoints << std::endl;
-    
+    /* Collect candidate points near target_y */
+    for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++) {
+      iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
 
-    unsigned short iMarker, iDim;
-    unsigned long iVertex, iPoint, iSurfacePoints;
+      if (config->GetMarker_All_DV(iMarker) == YES) {
+        iVertex = FFDBox->Get_VertexIndex(iSurfacePoints);
+        iPoint = FFDBox->Get_PointIndex(iSurfacePoints);
 
-    unsigned short nDim = geometry->GetnDim();
+        for (iDim = 0; iDim < nDim; iDim++) {
+          CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
+        }
 
-    su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
-
-    const su2double tolerance  = 1e-2;
-
-     /* Define arrays for storing data */
-    su2double stored_y[FFD_ypoints];
-    su2double stored_normals[FFD_ypoints][3];
-    int stored_count = 0;
-
-    for (int j = 0; j < FFD_ypoints; ++j)
-    { 
-      /* Get current slice location */
-      su2double target_y = FFD_ymin + j * dy;
-
-      /* Double array to hold three (x,y,z) points near slice location */
-      su2double Points[3][3];  
-
-      /* Counter to find three (x,y,z) points at slice location */
-      int found = 0;
-
-      /*--- Compute the cartesians coordinates ---*/
-      for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++)
-      {
-        if (found == 3) break;
-
-        /*--- Get the marker index of the surface point ---*/
-        iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
-
-        if (config->GetMarker_All_DV(iMarker) == YES)
-        {
-          /*--- Get the vertex of the surface point ---*/
-          iVertex = FFDBox->Get_VertexIndex(iSurfacePoints);
-          iPoint = FFDBox->Get_PointIndex(iSurfacePoints);
-
-          /* Get the curent cartersian coordinates of the surface point ---*/
-          for (iDim = 0; iDim < nDim; iDim++)
-          {
-            CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
+        if (fabs(CartCoord[1] - target_y) < tolerance && num_candidates < max_candidates) {
+          for (iDim = 0; iDim < 3; iDim++) {
+            Candidates[num_candidates][iDim] = CartCoord[iDim];
           }
-
-          if (fabs(CartCoord[1]- target_y) < tolerance)
-          {
-            for (iDim = 0; iDim < 3; iDim++)
-            {
-              Points[found][iDim] = CartCoord[iDim];
-            }
-            found ++;
-          }
+          num_candidates++;
         }
       }
+    }
 
-      /* Only compute normal if this rank found enough points */
-      if (found < 3) 
-      {
-        //std::cout << "Rank " << rank << ": Not enough points near y = " << target_y << std::endl;
-        continue;  // Skip this y-slice, but keep looping
+    if (num_candidates < 3) continue;
+
+    /* Find two most widely separated points in z */
+    int idx0 = 0, idx1 = 1;
+    su2double max_zdist = 0.0;
+    for (int i = 0; i < num_candidates; ++i) {
+      for (int k = i + 1; k < num_candidates; ++k) {
+        su2double dz = fabs(Candidates[i][2] - Candidates[k][2]);
+        if (dz > max_zdist) {
+          max_zdist = dz;
+          idx0 = i;
+          idx1 = k;
+        }
       }
-      
+    }
 
-      /* Initialize and compute tangent vectors for this slice location */
-      su2double u[3], v[3], normal[3];
-    
-      for (iDim =0; iDim < 3; iDim++)
-      {
-        u[iDim] = Points[1][iDim] - Points[0][iDim];
-        v[iDim] = Points[2][iDim] - Points[0][iDim];
+    /* Select a third point not equal to the first two */
+    int idx2 = -1;
+    for (int k = 0; k < num_candidates; ++k) {
+      if (k != idx0 && k != idx1) {
+        idx2 = k;
+        break;
       }
+    }
+    if (idx2 == -1) continue;
 
+    /* Form 3D points for normal calculation */
+    su2double Points[3][3];
+    for (iDim = 0; iDim < 3; ++iDim) {
+      Points[0][iDim] = Candidates[idx0][iDim];
+      Points[1][iDim] = Candidates[idx1][iDim];
+      Points[2][iDim] = Candidates[idx2][iDim];
+    }
 
-      // Compute cross product: normal = u × v
-      normal[0] = u[1]*v[2] - u[2]*v[1];
-      normal[1] = u[2]*v[0] - u[0]*v[2];
-      normal[2] = u[0]*v[1] - u[1]*v[0];
+    /* Compute normal using cross product of vectors u = P1 - P0, v = P2 - P0 */
+    su2double u[3], v[3], normal[3];
+    for (iDim = 0; iDim < 3; ++iDim) {
+      u[iDim] = Points[1][iDim] - Points[0][iDim];
+      v[iDim] = Points[2][iDim] - Points[0][iDim];
+    }
 
-      // Normalize
-      su2double norm = sqrt(normal[0]*normal[0] + normal[1]*normal[1] + normal[2]*normal[2]);
+    normal[0] = u[1]*v[2] - u[2]*v[1];
+    normal[1] = u[2]*v[0] - u[0]*v[2];
+    normal[2] = u[0]*v[1] - u[1]*v[0];
 
-      if (norm < EPS) 
-      {
-       return;
-      }
+    su2double norm = sqrt(normal[0]*normal[0] + normal[1]*normal[1] + normal[2]*normal[2]);
+    if (norm < EPS) continue;
 
-      for (iDim = 0; iDim < 3; iDim++) 
-      {
-        normal[iDim] /= norm;
-      }
+    for (iDim = 0; iDim < 3; ++iDim) normal[iDim] /= norm;
 
-      stored_y[stored_count] = target_y;
+    stored_y[stored_count] = target_y;
+    for (iDim = 0; iDim < 3; ++iDim)
+      stored_normals[stored_count][iDim] = normal[iDim];
 
-      for (iDim = 0; iDim < 3; iDim++)
-      {
-        stored_normals[stored_count][iDim] = normal[iDim];
-      }
+    stored_count++;
+  }
 
-      stored_count++;
-
-      
-      //std::cout << ": Normal at y = " << target_y << " is ("
-      //<< normal[0] << ", " << normal[1] << ", " << normal[2] << ")\n";
-    } // End loop over slice locations 
-
-      // Print all collected normals after the loop
   std::cout << "\nSpanwise Normals (Rank " << rank << "):\n";
-  for (int i = 0; i < stored_count; ++i) 
-  {
+  for (int i = 0; i < stored_count; ++i) {
     std::cout << "y = " << stored_y[i]
               << " -> Normal = (" << stored_normals[i][0]
               << ", " << stored_normals[i][1]
               << ", " << stored_normals[i][2] << ")\n";
   }
 }
+
 
 
 su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
