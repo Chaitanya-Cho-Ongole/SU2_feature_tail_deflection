@@ -1656,63 +1656,135 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   unsigned short iFFDBox, bool ResetDef) 
 { 
 
+  su2double CartCoord[3];
+  /*
   if (rank == MASTER_NODE)
   {
     std::cout <<"Number of DV markers" << config->GetnMarker_DV() << std::endl;
     std::cout <<"Numeber of vertices on wing: "<< geometry->GetnVertex(4) << std::endl;
   }
 
+  */
+
+  /* Loop over all markers and compute normals only if maker is wing */
+  for (int i = 0; i < config->GetnMarker_All(); i++)
+  {
+    if (config->GetMarker_All_TagBound(i) == "wing")
+    {
+      std::cout << "Found wing marker on local rank at index: " << i << std::endl;
+      std::cout <<"Numeber of vertices on wing: "<< geometry->GetnVertex(i) << std::endl;
+
+      /* get FFD bounding box for uniformly spaced slice definition */
+      
+      su2double FFD_ymin = config->GetCoordFFDBox(iFFDBox, 1);  // y-min
+      su2double FFD_ymax = config->GetCoordFFDBox(iFFDBox, 7);  // y-max
+      unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
+
+      unsigned short iMarker, iDim;
+      unsigned long iVertex, iPoint, iSurfacePoints;
+      unsigned short nDim = geometry->GetnDim();
+
+      unsigned long num_coords = 0;
+
+      su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
+
+      const su2double tolerance = 1e-2;
+
+      su2double stored_normals[FFD_ypoints][3];
+
+      std::ofstream csv_file("candidate_points.csv");
+
+      csv_file << "X,Y,Z\n";  // CSV header
+
+      /* Loop over all slice locations */
+      for (int j = 0; j < FFD_ypoints; ++j)
+      {
+        /* Slice location */
+        su2double target_y = FFD_ymin + j * dy;
+        
+
+        const int max_candidates = 100;
+        su2double Candidates[max_candidates][3];
+        int num_candidates = 0;
+        int num_coords = 0;
+
+        /* Loop over all vertices and extract coordinate array */
+        for (iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++)
+        {
+
+          iPoint = geometry->vertex[i][iVertex]->GetNode();
+          for (iDim = 0; iDim < nDim; iDim++) 
+          {
+            CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
+          }
+          num_coords++;
+          csv_file << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
+        }
+        std::cout << "Number of coordinates: " << num_coords << std::endl;
+          //if (fabs(CartCoord[1] - target_y) < tolerance && num_candidates < max_candidates) 
+          //{
+          //  for (iDim = 0; iDim < 3; iDim++) 
+          //  {
+          //    Candidates[num_candidates][iDim] = CartCoord[iDim];
+          //  }
+          //num_candidates++;
+      } // End slice location loop
+      csv_file.close();
+      //break;   // Break here since we only need the first instnace of "wing" at local rank
+    }
+  }
+}  // main Function exit
+  
 
 
-  su2double CartCoord[3];
 
-  su2double FFD_ymin = config->GetCoordFFDBox(iFFDBox, 1);  // y-min
-  su2double FFD_ymax = config->GetCoordFFDBox(iFFDBox, 7);  // y-max
-  unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
+ 
 
+  
+  
+  
+  /*
   std::cout << "Y_min: " << FFD_ymin << std::endl;
   std::cout << "Y_max: " << FFD_ymax << std::endl;
   std::cout << "Slice points: " << FFD_ypoints << std::endl;
+  */
+  //unsigned short iMarker, iDim;
+  //unsigned long iVertex, iPoint, iSurfacePoints;
+  //unsigned short nDim = geometry->GetnDim();
 
-  unsigned short iMarker, iDim;
-  unsigned long iVertex, iPoint, iSurfacePoints;
-  unsigned short nDim = geometry->GetnDim();
-
+  /*
   std::cout << " Number of vertices in Marker index 0: " << geometry->GetnVertex(0) << std::endl;
   std::cout << " Number of vertices in Marker index 1: " << geometry->GetnVertex(1) << std::endl;
   std::cout << " Number of vertices in Marker index 2: " << geometry->GetnVertex(2) << std::endl;
   std::cout << " Number of vertices in Marker index 3: " << geometry->GetnVertex(3) << std::endl;
   std::cout << " Number of vertices in Marker index 4: " << geometry->GetnVertex(4) << std::endl;
-  unsigned long num_coords = 0;
-  for (iVertex = 0; iVertex < geometry->GetnVertex(4); iVertex++)
-  {
-    iPoint = geometry->vertex[4][iVertex]->GetNode();
+  */
+
+  //unsigned long num_coords = 0;
+  //for (iVertex = 0; iVertex < geometry->GetnVertex(4); iVertex++)
+  //{
+  //  iPoint = geometry->vertex[4][iVertex]->GetNode();
     //std::cout <<"X-coordinate:" << geometry->nodes->GetCoord(iPoint, 0) << std::endl;
-    num_coords  = num_coords + 1;
-  }
+  //  num_coords  = num_coords + 1;
+  //}
 
-  std::cout << "Number of coordinates along x: " << num_coords << std::endl;
+  //std::cout << "Number of coordinates along x: " << num_coords << std::endl;
 
-  su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
-  const su2double tolerance = 1e-2;
+  
+  
 
-  su2double stored_y[FFD_ypoints];
-  su2double stored_normals[FFD_ypoints][3];
-  int stored_count = 0;
+  //su2double stored_y[FFD_ypoints];
+  
+  //int stored_count = 0;
 
   // Open CSV file for writing
-  std::ofstream csv_file("candidate_points.csv");
-  csv_file << "X,Y,Z\n";  // CSV header
+  
+  
 
-  for (int j = 0; j < FFD_ypoints; ++j)
-  { 
-    su2double target_y = FFD_ymin + j * dy;
+  
+  
 
-    const int max_candidates = 100;
-    su2double Candidates[max_candidates][3];
-    int num_candidates = 0;
-
-    /* Collect candidate points near target_y */
+    /* Collect candidate points near target_y 
     for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++) 
     {
       iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
@@ -1745,7 +1817,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
 
     if (num_candidates < 3) continue;
 
-    /* Find two most widely separated points in z */
+    
     int idx0 = 0, idx1 = 1;
     su2double max_zdist = 0.0;
     for (int i = 0; i < num_candidates; ++i) {
@@ -1759,7 +1831,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
       }
     }
 
-    /* Select a third point not equal to the first two */
+   
     int idx2 = -1;
     for (int k = 0; k < num_candidates; ++k) {
       if (k != idx0 && k != idx1) {
@@ -1769,7 +1841,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     }
     if (idx2 == -1) continue;
 
-    /* Form 3D points for normal calculation */
+   
     su2double Points[3][3];
     for (iDim = 0; iDim < 3; ++iDim) {
       Points[0][iDim] = Candidates[idx0][iDim];
@@ -1777,7 +1849,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
       Points[2][iDim] = Candidates[idx2][iDim];
     }
 
-    /* Compute normal using cross product of vectors u = P1 - P0, v = P2 - P0 */
+    
     su2double u[3], v[3], normal[3];
     for (iDim = 0; iDim < 3; ++iDim) {
       u[iDim] = Points[1][iDim] - Points[0][iDim];
@@ -1800,7 +1872,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     stored_count++;
   }
 
-    /* Close the CSV file */
+   
     csv_file.close();
 
   std::cout << "\nSpanwise Normals (Rank " << rank << "):\n";
@@ -1811,6 +1883,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
               << ", " << stored_normals[i][2] << ")\n";
   }
 }
+*/
 
 
 
