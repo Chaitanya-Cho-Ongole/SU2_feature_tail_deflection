@@ -1678,6 +1678,11 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   unsigned long iVertex, iPoint, iSurfacePoints;
   unsigned short nDim = geometry->GetnDim();
 
+  std::cout << " Number of vertices in Marker index 0: " << geometry->GetnVertex(0) << std::endl;
+  std::cout << " Number of vertices in Marker index 1: " << geometry->GetnVertex(1) << std::endl;
+  std::cout << " Number of vertices in Marker index 2: " << geometry->GetnVertex(2) << std::endl;
+  std::cout << " Number of vertices in Marker index 3: " << geometry->GetnVertex(3) << std::endl;
+  std::cout << " Number of vertices in Marker index 4: " << geometry->GetnVertex(4) << std::endl;
   unsigned long num_coords = 0;
   for (iVertex = 0; iVertex < geometry->GetnVertex(4); iVertex++)
   {
