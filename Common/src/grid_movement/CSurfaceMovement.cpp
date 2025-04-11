@@ -1738,7 +1738,6 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     std::cout <<"Number of DV markers" << config->GetnMarker_DV() << std::endl;
     std::cout <<"Numeber of vertices on wing: "<< geometry->GetnVertex(4) << std::endl;
   }
-
   */
 
   /* Loop over all markers and compute normals only if maker is wing */
@@ -1750,53 +1749,68 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
       std::cout <<"Numeber of vertices on wing: "<< geometry->GetnVertex(i) << std::endl;
 
       /* get FFD bounding box for uniformly spaced slice definition */
-      
       su2double FFD_ymin = config->GetCoordFFDBox(iFFDBox, 1);  // y-min
       su2double FFD_ymax = config->GetCoordFFDBox(iFFDBox, 7);  // y-max
+
+      /* get number of spanwise slices based on FFD y-degree*/
       unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
 
-      unsigned short iMarker, iDim;
-      unsigned long iVertex, iPoint, iSurfacePoints;
-      unsigned short nDim = geometry->GetnDim();
-
-      unsigned long num_coords = 0;
-
+      /* Uniform spacing of slice locations */
       su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
 
+      /* Problem dimension */
+      unsigned short nDim = geometry->GetnDim();
+
+      /* Tolerance */
       const su2double tolerance = 1e-2;
 
-      su2double stored_normals[FFD_ypoints][3];
+      /* TEMP: Define csv file for writing surface normals to disk */
+      std::ofstream csv_file("slice_normals.csv");
+      csv_file << "Y,Xn,Yn,Zn\n";
 
-      std::ofstream csv_file("candidate_points.csv");
-
-      csv_file << "X,Y,Z\n";  // CSV header
-
-      /* Loop over all slice locations */
-      for (int j = 0; j < FFD_ypoints; ++j)
+      for (int j = 0; j < FFD_ypoints; ++j) 
       {
-        /* Slice location */
+        /* Current slice location */
         su2double target_y = FFD_ymin + j * dy;
-        
-        int num_coords = 0;
 
-        /* Loop over all vertices and extract coordinate array */
-        for (iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++)
+        /* Set a limit on number of points to consider to build plane at slice location*/
+        const int max_pts = 10000;
+
+        /* Initialize x,y,z arrays for coordinates */
+        su2double x_vals[max_pts], y_vals[max_pts], z_vals[max_pts];
+
+        int count = 0;
+
+        /* Loop over all vertices belonging to maker i (wing)*/
+        for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++)
         {
+          /* get point index of this vertex */
+          unsigned long iPoint  = geometry->vertex[i][iVertex]->GetNode();
 
-          iPoint = geometry->vertex[i][iVertex]->GetNode();
-          for (iDim = 0; iDim < nDim; iDim++) 
+          /* Loop over dimensions and get coordinates for this point */
+          for (int iDim = 0; iDim < nDim; iDim++)
           {
             CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
           }
-          num_coords++;
-          csv_file << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
+
+          /* See if the y coordinates are close to target y location */
+          if ( std::abs(CartCoord[1] - target_y) < tolerance && count < max_pts)
+          {
+            x_vals[count] = CartCoord[0];
+            y_vals[count] = CartCoord[1];
+            z_vals[count] = CartCoord[2];
+            count++;
+          }
         }
-        std::cout << "Number of coordinates: " << num_coords << std::endl;
-          
-          
-      } 
-      csv_file.close();
-     
+        
+        /* Suffcient points found at slice location, fit a plane */
+        if (count >= 3)
+        {
+          su2double normal[3];
+          ComputeBestFitPlaneNormal(x_vals,y_vals, z_vals, count, normal);
+          csv_file << target_y << "," << normal[0] << "," << normal[1] << "," << normal[2] << "\n";
+        }
+      }
     }
   }
 }  // main Function exit
