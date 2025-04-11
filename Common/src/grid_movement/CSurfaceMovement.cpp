@@ -1773,12 +1773,14 @@ for (int j = 0; j < n_slices; ++j) {
 su2double y_target = y_min + j * dy;
 su2double x_le = 1e10, x_te = -1e10;
 su2double sum_z = 0.0;
+su2double sum_x = 0.0;
 int count = 0;
 
-for (int i = 0; i < total_pts; ++i) {
-if (std::abs(Y[i] - y_target) < 0.01) {
-if (X[i] < x_le) x_le = X[i];
-if (X[i] > x_te) x_te = X[i];
+for (int i = 0; i < total_pts; ++i) 
+{
+if (std::abs(Y[i] - y_target) < 0.1) 
+{
+sum_x += X[i];
 sum_z += Z[i];
 count++;
 }
@@ -1786,7 +1788,7 @@ count++;
 
 if (count > 0) {
 su2double chord = x_te - x_le;
-spine_x[spine_pts] = x_le + 0.25 * chord;
+spine_x[spine_pts] = sum_x/ count;
 spine_y[spine_pts] = y_target;
 spine_z[spine_pts] = sum_z / count;
 spine_pts++;
