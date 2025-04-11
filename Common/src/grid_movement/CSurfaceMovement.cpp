@@ -1660,7 +1660,7 @@ void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const 
       std::cout << "Not enough points found at slice location, setting normal to zero! " << std::endl;
     }
     /* If number of points is less than 3, set normal to zero (no deformation) */
-    normal_out[0] = normal_out[1]= normal_out[2] = 0.0;
+    normal_out[0] = normal_out[1] = normal_out[2] = 0.0;
     return;
   }
 
@@ -1727,243 +1727,129 @@ void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const 
   }
 }
 
+
+// Computes geometric surface normals for a non-planar wing by
+// (1) building a 3D spline (spine curve) from wing surface points
+// (2) defining planes perpendicular to the spine
+// (3) computing surface normals using least-squares plane fitting
+
+#define MAX_POINTS 10000
+
+
 void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
-  unsigned short iFFDBox, bool ResetDef) 
-{ 
+  unsigned short iFFDBox, bool ResetDef) {
+su2double X[MAX_POINTS], Y[MAX_POINTS], Z[MAX_POINTS];
+int total_pts = 0;
 
-  su2double CartCoord[3];
-  /*
-  if (rank == MASTER_NODE)
-  {
-    std::cout <<"Number of DV markers" << config->GetnMarker_DV() << std::endl;
-    std::cout <<"Numeber of vertices on wing: "<< geometry->GetnVertex(4) << std::endl;
-  }
-  */
+for (int i = 0; i < config->GetnMarker_All(); i++) {
+if (config->GetMarker_All_TagBound(i) == "wing") {
+unsigned short nDim = geometry->GetnDim();
+su2double CartCoord[3];
 
-  /* Loop over all markers and compute normals only if maker is wing */
-  for (int i = 0; i < config->GetnMarker_All(); i++)
-  {
-    if (config->GetMarker_All_TagBound(i) == "wing")
-    {
-      std::cout << "Found wing marker on local rank at index: " << i << std::endl;
-      std::cout <<"Numeber of vertices on wing: "<< geometry->GetnVertex(i) << std::endl;
+for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++) {
+unsigned long iPoint = geometry->vertex[i][iVertex]->GetNode();
+for (int d = 0; d < nDim; ++d)
+CartCoord[d] = geometry->nodes->GetCoord(iPoint, d);
 
-      /* get FFD bounding box for uniformly spaced slice definition */
-      su2double FFD_ymin = config->GetCoordFFDBox(iFFDBox, 1);  // y-min
-      su2double FFD_ymax = config->GetCoordFFDBox(iFFDBox, 7);  // y-max
-
-      /* get number of spanwise slices based on FFD y-degree*/
-      unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
-
-      /* Uniform spacing of slice locations */
-      su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
-
-      /* Problem dimension */
-      unsigned short nDim = geometry->GetnDim();
-
-      /* Tolerance */
-      const su2double tolerance = 1e-2;
-
-      /* TEMP: Define csv file for writing surface normals to disk */
-      std::ofstream csv_file("slice_normals.csv");
-      csv_file << "Y,Xn,Yn,Zn\n";
-
-      for (int j = 0; j < FFD_ypoints; ++j) 
-      {
-        /* Current slice location */
-        su2double target_y = FFD_ymin + j * dy;
-
-        /* Set a limit on number of points to consider to build plane at slice location*/
-        const int max_pts = 10000;
-
-        /* Initialize x,y,z arrays for coordinates */
-        su2double x_vals[max_pts], y_vals[max_pts], z_vals[max_pts];
-
-        int count = 0;
-
-        /* Loop over all vertices belonging to maker i (wing)*/
-        for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++)
-        {
-          /* get point index of this vertex */
-          unsigned long iPoint  = geometry->vertex[i][iVertex]->GetNode();
-
-          /* Loop over dimensions and get coordinates for this point */
-          for (int iDim = 0; iDim < nDim; iDim++)
-          {
-            CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
-          }
-
-          /* See if the y coordinates are close to target y location */
-          if ( std::abs(CartCoord[1] - target_y) < tolerance && count < max_pts)
-          {
-            x_vals[count] = CartCoord[0];
-            y_vals[count] = CartCoord[1];
-            z_vals[count] = CartCoord[2];
-            count++;
-          }
-        }
-        
-        /* Suffcient points found at slice location, fit a plane */
-        if (count >= 3)
-        {
-          su2double normal[3];
-          ComputeBestFitPlaneNormal(x_vals,y_vals, z_vals, count, normal);
-          csv_file << target_y << "," << normal[0] << "," << normal[1] << "," << normal[2] << "\n";
-        }
-      }
-    }
-  }
-}  // main Function exit
-  
-
-
-
- 
-
-  
-  
-  
-  /*
-  std::cout << "Y_min: " << FFD_ymin << std::endl;
-  std::cout << "Y_max: " << FFD_ymax << std::endl;
-  std::cout << "Slice points: " << FFD_ypoints << std::endl;
-  */
-  //unsigned short iMarker, iDim;
-  //unsigned long iVertex, iPoint, iSurfacePoints;
-  //unsigned short nDim = geometry->GetnDim();
-
-  /*
-  std::cout << " Number of vertices in Marker index 0: " << geometry->GetnVertex(0) << std::endl;
-  std::cout << " Number of vertices in Marker index 1: " << geometry->GetnVertex(1) << std::endl;
-  std::cout << " Number of vertices in Marker index 2: " << geometry->GetnVertex(2) << std::endl;
-  std::cout << " Number of vertices in Marker index 3: " << geometry->GetnVertex(3) << std::endl;
-  std::cout << " Number of vertices in Marker index 4: " << geometry->GetnVertex(4) << std::endl;
-  */
-
-  //unsigned long num_coords = 0;
-  //for (iVertex = 0; iVertex < geometry->GetnVertex(4); iVertex++)
-  //{
-  //  iPoint = geometry->vertex[4][iVertex]->GetNode();
-    //std::cout <<"X-coordinate:" << geometry->nodes->GetCoord(iPoint, 0) << std::endl;
-  //  num_coords  = num_coords + 1;
-  //}
-
-  //std::cout << "Number of coordinates along x: " << num_coords << std::endl;
-
-  
-  
-
-  //su2double stored_y[FFD_ypoints];
-  
-  //int stored_count = 0;
-
-  // Open CSV file for writing
-  
-  
-
-  
-  
-
-    /* Collect candidate points near target_y 
-    for (iSurfacePoints = 0; iSurfacePoints < FFDBox->GetnSurfacePoint(); iSurfacePoints++) 
-    {
-      iMarker = FFDBox->Get_MarkerIndex(iSurfacePoints);
-
-      if (config->GetMarker_All_DV(iMarker) == YES) 
-      {
-        iVertex = FFDBox->Get_VertexIndex(iSurfacePoints);
-        iPoint = FFDBox->Get_PointIndex(iSurfacePoints);
-
-        for (iDim = 0; iDim < nDim; iDim++) 
-        {
-          CartCoord[iDim] = geometry->nodes->GetCoord(iPoint, iDim);
-        }
-
-        if (fabs(CartCoord[1] - target_y) < tolerance && num_candidates < max_candidates) 
-        {
-          for (iDim = 0; iDim < 3; iDim++) 
-          {
-            Candidates[num_candidates][iDim] = CartCoord[iDim];
-          }
-
-          // Write candidate point to CSV
-          csv_file << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
-
-
-          num_candidates++;
-        }
-      }
-    }
-
-    if (num_candidates < 3) continue;
-
-    
-    int idx0 = 0, idx1 = 1;
-    su2double max_zdist = 0.0;
-    for (int i = 0; i < num_candidates; ++i) {
-      for (int k = i + 1; k < num_candidates; ++k) {
-        su2double dz = fabs(Candidates[i][2] - Candidates[k][2]);
-        if (dz > max_zdist) {
-          max_zdist = dz;
-          idx0 = i;
-          idx1 = k;
-        }
-      }
-    }
-
-   
-    int idx2 = -1;
-    for (int k = 0; k < num_candidates; ++k) {
-      if (k != idx0 && k != idx1) {
-        idx2 = k;
-        break;
-      }
-    }
-    if (idx2 == -1) continue;
-
-   
-    su2double Points[3][3];
-    for (iDim = 0; iDim < 3; ++iDim) {
-      Points[0][iDim] = Candidates[idx0][iDim];
-      Points[1][iDim] = Candidates[idx1][iDim];
-      Points[2][iDim] = Candidates[idx2][iDim];
-    }
-
-    
-    su2double u[3], v[3], normal[3];
-    for (iDim = 0; iDim < 3; ++iDim) {
-      u[iDim] = Points[1][iDim] - Points[0][iDim];
-      v[iDim] = Points[2][iDim] - Points[0][iDim];
-    }
-
-    normal[0] = u[1]*v[2] - u[2]*v[1];
-    normal[1] = u[2]*v[0] - u[0]*v[2];
-    normal[2] = u[0]*v[1] - u[1]*v[0];
-
-    su2double norm = sqrt(normal[0]*normal[0] + normal[1]*normal[1] + normal[2]*normal[2]);
-    if (norm < EPS) continue;
-
-    for (iDim = 0; iDim < 3; ++iDim) normal[iDim] /= norm;
-
-    stored_y[stored_count] = target_y;
-    for (iDim = 0; iDim < 3; ++iDim)
-      stored_normals[stored_count][iDim] = normal[iDim];
-
-    stored_count++;
-  }
-
-   
-    csv_file.close();
-
-  std::cout << "\nSpanwise Normals (Rank " << rank << "):\n";
-  for (int i = 0; i < stored_count; ++i) {
-    std::cout << "y = " << stored_y[i]
-              << " -> Normal = (" << stored_normals[i][0]
-              << ", " << stored_normals[i][1]
-              << ", " << stored_normals[i][2] << ")\n";
-  }
+if (total_pts < MAX_POINTS) {
+X[total_pts] = CartCoord[0];
+Y[total_pts] = CartCoord[1];
+Z[total_pts] = CartCoord[2];
+total_pts++;
 }
-*/
+}
+}
+}
+
+su2double y_min = config->GetCoordFFDBox(iFFDBox, 1);
+su2double y_max = config->GetCoordFFDBox(iFFDBox, 7);
+unsigned short n_slices = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
+su2double dy = (y_max - y_min) / (n_slices - 1);
+
+su2double spine_x[n_slices], spine_y[n_slices], spine_z[n_slices];
+int spine_pts = 0;
+
+for (int j = 0; j < n_slices; ++j) {
+su2double y_target = y_min + j * dy;
+su2double x_le = 1e10, x_te = -1e10;
+su2double sum_z = 0.0;
+int count = 0;
+
+for (int i = 0; i < total_pts; ++i) {
+if (std::abs(Y[i] - y_target) < 0.01) {
+if (X[i] < x_le) x_le = X[i];
+if (X[i] > x_te) x_te = X[i];
+sum_z += Z[i];
+count++;
+}
+}
+
+if (count > 0) {
+su2double chord = x_te - x_le;
+spine_x[spine_pts] = x_le + 0.25 * chord;
+spine_y[spine_pts] = y_target;
+spine_z[spine_pts] = sum_z / count;
+spine_pts++;
+}
+}
+
+if (spine_pts < 3) return;
+
+std::ofstream csv("slice_normals.csv");
+csv << "Y,Xn,Yn,Zn\n";
+
+for (int j = 1; j < spine_pts - 1; ++j) {
+su2double tx = spine_x[j+1] - spine_x[j-1];
+su2double ty = spine_y[j+1] - spine_y[j-1];
+su2double tz = spine_z[j+1] - spine_z[j-1];
+su2double tmag = std::sqrt(tx*tx + ty*ty + tz*tz);
+tx /= tmag; ty /= tmag; tz /= tmag;
+
+su2double px = spine_x[j];
+su2double py = spine_y[j];
+su2double pz = spine_z[j];
+
+su2double x_slice[MAX_POINTS], y_slice[MAX_POINTS], z_slice[MAX_POINTS];
+int slice_count = 0;
+for (int i = 0; i < total_pts; ++i) {
+su2double dx = X[i] - px;
+su2double dy = Y[i] - py;
+su2double dz = Z[i] - pz;
+su2double dist = std::abs(dx*tx + dy*ty + dz*tz);
+if (dist < 0.01 && slice_count < MAX_POINTS) {
+x_slice[slice_count] = X[i];
+y_slice[slice_count] = Y[i];
+z_slice[slice_count] = Z[i];
+slice_count++;
+}
+}
+
+if (slice_count >= 3) {
+su2double normal[3];
+ComputeBestFitPlaneNormal(x_slice, y_slice, z_slice, slice_count, normal);
+
+su2double dot = normal[1]*1.0 + normal[2]*1.0;
+if (dot < 0.0) {
+normal[0] = -normal[0];
+normal[1] = -normal[1];
+normal[2] = -normal[2];
+}
+
+csv << spine_y[j] << "," << normal[0] << "," << normal[1] << "," << normal[2] << "\n";
+}
+}
+
+csv.close();
+
+std::ofstream spine_csv("spine_points.csv");
+spine_csv << "X,Y,Z\n";
+for (int j = 0; j < spine_pts; ++j) {
+spine_csv << spine_x[j] << "," << spine_y[j] << "," << spine_z[j] << "\n";
+}
+spine_csv.close();
+}
+
+
 
 
 
