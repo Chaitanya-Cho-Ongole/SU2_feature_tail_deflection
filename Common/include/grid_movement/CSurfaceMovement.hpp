@@ -284,6 +284,16 @@ class CSurfaceMovement : public CGridMovement {
   void getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
     bool ResetDef);
 
+    /*!
+   * \brief Compute the "best fit" plane normal to a wing slice locaton
+   * \param[in] x_vals - Array of x-coordinates (chordwise)
+   * \param[in] y_vals - Array of y-coordinates (spanwise)
+   * \param[in] z_vals - Array of z-coordinates (thickness)
+   * \param[in] N - Number of points
+   * \param[in] normal_out - Array of surface normals
+   */
+  void ComputeBestFitPlaneNormal(const su2double* x_vals, const su2double* y_vals, const su2double* z_vals, int N, su2double* normal_out);
+
   /*!
    * \brief Set the deformation of the Free From box using the control point position.
    * \param[in] geometry - Geometrical definition of the problem.

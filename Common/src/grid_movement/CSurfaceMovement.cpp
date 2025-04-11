@@ -1651,6 +1651,81 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
   }
 }
 
+void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const su2double* y_vals, const su2double* z_vals, int N, su2double* normal_out)
+{
+  if (N < 3)
+  {
+    if (rank == MASTER_NODE)
+    {
+      std::cout << "Not enough points found at slice location, setting normal to zero! " << std::endl;
+    }
+    /* If number of points is less than 3, set normal to zero (no deformation) */
+    normal_out[0] = normal_out[1]= normal_out[2] = 0.0;
+    return;
+  }
+
+  /* We have enough points to construct a plane */
+  /* Compute the plane centroid */
+  su2double x_mean = 0.0, y_mean = 0.0, z_mean = 0.0;
+
+  for (int i = 0; i < N; i++)
+  {
+    x_mean +=x_vals[i];
+    y_mean +=y_vals[i];
+    z_mean +=z_vals[i];
+  }
+  x_mean /=N;
+  y_mean /=N;
+  z_mean /=N;
+
+  /* Compute the covariance terms */
+  su2double xx = 0.0, xy = 0.0, xz = 0.0;
+  su2double yy = 0.0, yz = 0.0, zz = 0.0;
+
+  for (int i = 0; i < N; i++)
+  {
+    su2double dx = x_vals[i] - x_mean;
+    su2double dy = y_vals[i] - y_mean;
+    su2double dz = z_vals[i] - z_mean;
+
+    xx += dx * dx;
+    xy += dx * dy;
+    xz += dx * dz;
+    yy += dy * dy;
+    yz += dy * dz;
+    zz += dz * dz;
+  }
+
+  /* Cross product of domiant directions (vx * vy) */
+
+  su2double vx[3] = {xx, xy, xz};
+  su2double vy[3] = {xy, yy, yz};
+
+  normal_out[0] = vx[1]*vy[2] - vx[2]*vy[1];
+  normal_out[1] = vx[2]*vy[0] - vx[0]*vy[2];
+  normal_out[2] = vx[0]*vy[1] - vx[1]*vy[0];
+
+  /* Normalize */
+  su2double mag = std::sqrt(normal_out[0]*normal_out[0] +
+      normal_out[1]*normal_out[1] +
+      normal_out[2]*normal_out[2]);
+
+  if (mag > 1e-12)
+  {
+    normal_out[0] /= mag;
+    normal_out[1] /= mag;
+    normal_out[2] /= mag;
+  }
+  else
+  {
+    if (rank == MASTER_NODE)
+    {
+      std::cout << "Ill-defined normal at station: " << std::endl;
+    }
+
+    normal_out[0] = normal_out[1] = normal_out[2] = 0.0;
+  }
+}
 
 void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
   unsigned short iFFDBox, bool ResetDef) 
