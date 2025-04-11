@@ -1702,10 +1702,6 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
         /* Slice location */
         su2double target_y = FFD_ymin + j * dy;
         
-
-        const int max_candidates = 100;
-        su2double Candidates[max_candidates][3];
-        int num_candidates = 0;
         int num_coords = 0;
 
         /* Loop over all vertices and extract coordinate array */
@@ -1721,16 +1717,11 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
           csv_file << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
         }
         std::cout << "Number of coordinates: " << num_coords << std::endl;
-          //if (fabs(CartCoord[1] - target_y) < tolerance && num_candidates < max_candidates) 
-          //{
-          //  for (iDim = 0; iDim < 3; iDim++) 
-          //  {
-          //    Candidates[num_candidates][iDim] = CartCoord[iDim];
-          //  }
-          //num_candidates++;
-      } // End slice location loop
+          
+          
+      } 
       csv_file.close();
-      //break;   // Break here since we only need the first instnace of "wing" at local rank
+     
     }
   }
 }  // main Function exit
