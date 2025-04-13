@@ -22,9 +22,10 @@ def extract_max_z(surface_df, y_slices, delta_y=0.01):
     return np.array(max_z_points)
 
 def plot_3d_surface_with_slices(surface_df, y_slices):
-    fig = plt.figure(dpi=300)
+    fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(surface_df['X'], surface_df['Y'], surface_df['Z'], c='gray', alpha=0.1, s=0.5)
+    
+    ax.scatter(surface_df['X'], surface_df['Y'], surface_df['Z'], c='gray', alpha=0.05, s=0.5)
 
     x_min, x_max = surface_df['X'].min(), surface_df['X'].max()
     z_min, z_max = surface_df['Z'].min(), surface_df['Z'].max()
@@ -32,12 +33,19 @@ def plot_3d_surface_with_slices(surface_df, y_slices):
     for y in y_slices:
         X_plane, Z_plane = np.meshgrid([x_min, x_max], [z_min, z_max])
         Y_plane = np.full_like(X_plane, y)
-        ax.plot_surface(X_plane, Y_plane, Z_plane, color='blue', alpha=0.2, edgecolor='none')
+        ax.plot_surface(X_plane, Y_plane, Z_plane, color='blue', alpha=0.05, edgecolor='none')
 
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.set_title('Surface Mesh with Slice Planes')
+    ax.set_xlabel('X', fontsize=22, fontname="Times New Roman")
+    ax.set_ylabel('Y', fontsize=22, fontname="Times New Roman")
+    ax.set_zlabel('Z', fontsize=22, fontname="Times New Roman")
+    ax.grid(False)
+    ax.set_axis_off()
+    
+    F = plt.gcf()
+    Size = F.get_size_inches()
+    F.set_size_inches(Size[0]*1.5, Size[1]*1.5, forward=True)
+    
+    
     plt.tight_layout()
     plt.show()
 
@@ -46,11 +54,11 @@ def plot_yz_projection_with_vectors(max_z_points):
     if max_z_points.size > 0:
         ax.scatter(max_z_points[:, 0], max_z_points[:, 1], color='red')
 
-        # Fit spline and compute derivatives
+        # Fit spline and compute derivatives at slice locations only
         spline = UnivariateSpline(max_z_points[:, 0], max_z_points[:, 1], s=0)
-        y_dense = np.linspace(max_z_points[:, 0].min(), max_z_points[:, 0].max(), 300)
-        z_dense = spline(y_dense)
-        dz_dy = spline.derivative()(y_dense)
+        y_eval = max_z_points[:, 0]
+        z_eval = spline(y_eval)
+        dz_dy = spline.derivative()(y_eval)
 
         # Compute normalized tangent and normal vectors
         tangent_vectors = np.vstack([np.ones_like(dz_dy), dz_dy]).T
@@ -58,16 +66,27 @@ def plot_yz_projection_with_vectors(max_z_points):
         tangent_vectors /= np.linalg.norm(tangent_vectors, axis=1)[:, np.newaxis]
         normal_vectors /= np.linalg.norm(normal_vectors, axis=1)[:, np.newaxis]
 
-        skip = 10
-        ax.plot(y_dense, z_dense, color='black', label='Spline')
+        # Save vectors to CSV for slice locations only
+        output_df = pd.DataFrame({
+            'Y': y_eval,
+            'Z': z_eval,
+            'Tangent_Y': tangent_vectors[:, 0],
+            'Tangent_Z': tangent_vectors[:, 1],
+            'Normal_Y': normal_vectors[:, 0],
+            'Normal_Z': normal_vectors[:, 1],
+        })
+        output_df.to_csv("spline_vectors_at_slices.csv", index=False)
+
+        # Plot quivers
+        ax.plot(y_eval, z_eval, color='black', label='Spline at Slice Points')
         ax.quiver(
-            y_dense[::skip], z_dense[::skip],
-            normal_vectors[::skip, 0], normal_vectors[::skip, 1],
+            y_eval, z_eval,
+            normal_vectors[:, 0], normal_vectors[:, 1],
             angles='xy', scale_units='xy', scale=3, color='blue', width=0.007, label='Normal Vectors'
         )
         ax.quiver(
-            y_dense[::skip], z_dense[::skip],
-            tangent_vectors[::skip, 0], tangent_vectors[::skip, 1],
+            y_eval, z_eval,
+            tangent_vectors[:, 0], tangent_vectors[:, 1],
             angles='xy', scale_units='xy', scale=3, color='green', width=0.007, label='Tangent Vectors'
         )
 
