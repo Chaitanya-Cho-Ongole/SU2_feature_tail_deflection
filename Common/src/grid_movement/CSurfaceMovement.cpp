@@ -1651,52 +1651,32 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
   }
 }
 
+#define MAX_POINTS 10000
+
 void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const su2double* y_vals, const su2double* z_vals, int N, su2double* normal_out)
 {
-  if (N < 3)
-  {
-    if (rank == MASTER_NODE)
-    {
-      std::cout << "Not enough points found at slice location, setting normal to zero! " << std::endl;
-    }
-    /* If number of points is less than 3, set normal to zero (no deformation) */
+  if (N < 3) {
     normal_out[0] = normal_out[1] = normal_out[2] = 0.0;
     return;
   }
 
-  /* We have enough points to construct a plane */
-  /* Compute the plane centroid */
   su2double x_mean = 0.0, y_mean = 0.0, z_mean = 0.0;
-
-  for (int i = 0; i < N; i++)
-  {
-    x_mean +=x_vals[i];
-    y_mean +=y_vals[i];
-    z_mean +=z_vals[i];
+  for (int i = 0; i < N; ++i) {
+    x_mean += x_vals[i];
+    y_mean += y_vals[i];
+    z_mean += z_vals[i];
   }
-  x_mean /=N;
-  y_mean /=N;
-  z_mean /=N;
+  x_mean /= N; y_mean /= N; z_mean /= N;
 
-  /* Compute the covariance terms */
   su2double xx = 0.0, xy = 0.0, xz = 0.0;
   su2double yy = 0.0, yz = 0.0, zz = 0.0;
-
-  for (int i = 0; i < N; i++)
-  {
+  for (int i = 0; i < N; ++i) {
     su2double dx = x_vals[i] - x_mean;
     su2double dy = y_vals[i] - y_mean;
     su2double dz = z_vals[i] - z_mean;
-
-    xx += dx * dx;
-    xy += dx * dy;
-    xz += dx * dz;
-    yy += dy * dy;
-    yz += dy * dz;
-    zz += dz * dz;
+    xx += dx*dx; xy += dx*dy; xz += dx*dz;
+    yy += dy*dy; yz += dy*dz; zz += dz*dz;
   }
-
-  /* Cross product of domiant directions (vx * vy) */
 
   su2double vx[3] = {xx, xy, xz};
   su2double vy[3] = {xy, yy, yz};
@@ -1705,152 +1685,51 @@ void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const 
   normal_out[1] = vx[2]*vy[0] - vx[0]*vy[2];
   normal_out[2] = vx[0]*vy[1] - vx[1]*vy[0];
 
-  /* Normalize */
   su2double mag = std::sqrt(normal_out[0]*normal_out[0] +
-      normal_out[1]*normal_out[1] +
-      normal_out[2]*normal_out[2]);
+                            normal_out[1]*normal_out[1] +
+                            normal_out[2]*normal_out[2]);
 
-  if (mag > 1e-12)
-  {
+  if (mag > 1e-12) {
     normal_out[0] /= mag;
     normal_out[1] /= mag;
     normal_out[2] /= mag;
-  }
-  else
-  {
-    if (rank == MASTER_NODE)
-    {
-      std::cout << "Ill-defined normal at station: " << std::endl;
-    }
-
+  } else {
     normal_out[0] = normal_out[1] = normal_out[2] = 0.0;
   }
 }
 
 
-// Computes geometric surface normals for a non-planar wing by
-// (1) building a 3D spline (spine curve) from wing surface points
-// (2) defining planes perpendicular to the spine
-// (3) computing surface normals using least-squares plane fitting
-
-#define MAX_POINTS 10000
-
-
-void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
-  unsigned short iFFDBox, bool ResetDef) {
-su2double X[MAX_POINTS], Y[MAX_POINTS], Z[MAX_POINTS];
-int total_pts = 0;
-
-for (int i = 0; i < config->GetnMarker_All(); i++) {
-if (config->GetMarker_All_TagBound(i) == "wing") {
-unsigned short nDim = geometry->GetnDim();
-su2double CartCoord[3];
-
-for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++) {
-unsigned long iPoint = geometry->vertex[i][iVertex]->GetNode();
-for (int d = 0; d < nDim; ++d)
-CartCoord[d] = geometry->nodes->GetCoord(iPoint, d);
-
-if (total_pts < MAX_POINTS) {
-X[total_pts] = CartCoord[0];
-Y[total_pts] = CartCoord[1];
-Z[total_pts] = CartCoord[2];
-total_pts++;
-}
-}
-}
-}
-
-su2double y_min = config->GetCoordFFDBox(iFFDBox, 1);
-su2double y_max = config->GetCoordFFDBox(iFFDBox, 7);
-unsigned short n_slices = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
-su2double dy = (y_max - y_min) / (n_slices - 1);
-
-su2double spine_x[n_slices], spine_y[n_slices], spine_z[n_slices];
-int spine_pts = 0;
-
-for (int j = 0; j < n_slices; ++j) {
-su2double y_target = y_min + j * dy;
-su2double x_le = 1e10, x_te = -1e10;
-su2double sum_z = 0.0;
-su2double sum_x = 0.0;
-int count = 0;
-
-for (int i = 0; i < total_pts; ++i) 
+void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, bool ResetDef) 
 {
-if (std::abs(Y[i] - y_target) < 0.1) 
-{
-sum_x += X[i];
-sum_z += Z[i];
-count++;
+  
+  su2double CartCoord[3];
+  std::ofstream csv("surface_coordinates.csv");
+  csv << "X,Y,Z\n";  // Correct header
+
+  unsigned short n_slices = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
+
+
+  for (int i = 0; i < config->GetnMarker_All(); i++) 
+  {
+    if (config->GetMarker_All_TagBound(i) == "wing") 
+    {
+      unsigned short nDim = geometry->GetnDim();
+     
+
+      for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++) 
+      {
+        unsigned long iPoint = geometry->vertex[i][iVertex]->GetNode();
+        for (int dim = 0; dim < nDim; ++dim)
+        {
+          CartCoord[dim] = geometry->nodes->GetCoord(iPoint, dim);
+        }
+        csv << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
+      }
+    }
+  }
+
+    csv.close();
 }
-}
-
-if (count > 0) {
-su2double chord = x_te - x_le;
-spine_x[spine_pts] = sum_x/ count;
-spine_y[spine_pts] = y_target;
-spine_z[spine_pts] = sum_z / count;
-spine_pts++;
-}
-}
-
-if (spine_pts < 3) return;
-
-std::ofstream csv("slice_normals.csv");
-csv << "Y,Xn,Yn,Zn\n";
-
-for (int j = 1; j < spine_pts - 1; ++j) {
-su2double tx = spine_x[j+1] - spine_x[j-1];
-su2double ty = spine_y[j+1] - spine_y[j-1];
-su2double tz = spine_z[j+1] - spine_z[j-1];
-su2double tmag = std::sqrt(tx*tx + ty*ty + tz*tz);
-tx /= tmag; ty /= tmag; tz /= tmag;
-
-su2double px = spine_x[j];
-su2double py = spine_y[j];
-su2double pz = spine_z[j];
-
-su2double x_slice[MAX_POINTS], y_slice[MAX_POINTS], z_slice[MAX_POINTS];
-int slice_count = 0;
-for (int i = 0; i < total_pts; ++i) {
-su2double dx = X[i] - px;
-su2double dy = Y[i] - py;
-su2double dz = Z[i] - pz;
-su2double dist = std::abs(dx*tx + dy*ty + dz*tz);
-if (dist < 0.01 && slice_count < MAX_POINTS) {
-x_slice[slice_count] = X[i];
-y_slice[slice_count] = Y[i];
-z_slice[slice_count] = Z[i];
-slice_count++;
-}
-}
-
-if (slice_count >= 3) {
-su2double normal[3];
-ComputeBestFitPlaneNormal(x_slice, y_slice, z_slice, slice_count, normal);
-
-su2double dot = normal[1]*1.0 + normal[2]*1.0;
-if (dot < 0.0) {
-normal[0] = -normal[0];
-normal[1] = -normal[1];
-normal[2] = -normal[2];
-}
-
-csv << spine_y[j] << "," << normal[0] << "," << normal[1] << "," << normal[2] << "\n";
-}
-}
-
-csv.close();
-
-std::ofstream spine_csv("spine_points.csv");
-spine_csv << "X,Y,Z\n";
-for (int j = 0; j < spine_pts; ++j) {
-spine_csv << spine_x[j] << "," << spine_y[j] << "," << spine_z[j] << "\n";
-}
-spine_csv.close();
-}
-
 
 
 
