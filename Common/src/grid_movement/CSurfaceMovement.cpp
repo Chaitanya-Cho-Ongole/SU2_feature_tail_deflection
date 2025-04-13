@@ -1706,9 +1706,6 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   std::ofstream csv("surface_coordinates.csv");
   csv << "X,Y,Z\n";  // Correct header
 
-  unsigned short n_slices = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
-
-
   for (int i = 0; i < config->GetnMarker_All(); i++) 
   {
     if (config->GetMarker_All_TagBound(i) == "wing") 
@@ -1729,6 +1726,30 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   }
 
     csv.close();
+
+  /* Get the Y-extent of the FFD bounding box */
+  su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
+  su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the sevent coordinate
+  unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
+
+  std::ofstream csv2("slice_locations.csv");
+  csv2 << "Station index, Location \n"; 
+
+  /* Slice spacing based on FFD lattice distribution */
+  su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
+
+  /* Loop over all slice locations */
+
+  for (int j = 0; j < FFD_ypoints; j++)
+  {
+    su2double target_y = FFD_ymin + j * dy;
+
+    csv2 << j <<"," << target_y << "\n";
+  }
+
+  csv2.close();
+
+
 }
 
 
