@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 def load_data():
-    df_candidates = pd.read_csv("surface_points.csv")
-    df_normals = pd.read_csv("slice_normals.csv")
+    df_candidates = pd.read_csv("surface_coordinates.csv")
+    df_normals = pd.read_csv("slice_locations.csv")
     df_spine = pd.read_csv("spine_points.csv")
 
     # Clean trailing spaces from column names

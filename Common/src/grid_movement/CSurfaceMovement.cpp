@@ -35,6 +35,8 @@
 #include <limits>
 
 
+#define MAX_POINTS 1000000
+
 CSurfaceMovement::CSurfaceMovement() : CGridMovement() {
   size = SU2_MPI::GetSize();
   rank = SU2_MPI::GetRank();
@@ -1656,8 +1658,6 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
   }
 }
 
-#define MAX_POINTS 10000
-
 void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const su2double* y_vals, const su2double* z_vals, int N, su2double* normal_out)
 {
   if (N < 3) {
@@ -1706,15 +1706,21 @@ void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const 
 
 void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, bool ResetDef) 
 {
-  
+ 
   su2double CartCoord[3];
 
-  #define MAX_POINTS 10000
-  double X[MAX_POINTS], Y[MAX_POINTS], Z[MAX_POINTS];
+  su2double* X = new su2double[MAX_POINTS];
+  su2double* Y = new su2double[MAX_POINTS];
+  su2double* Z = new su2double[MAX_POINTS];
+
+  su2double* Xc = new su2double[MAX_POINTS];
+  su2double* Yc = new su2double[MAX_POINTS];
+  su2double* Zc = new su2double[MAX_POINTS];
+
   int N = 0;
 
-  std::ofstream csv("surface_coordinates.csv");
-  csv << "X,Y,Z\n";  // Correct header
+  //std::ofstream csv("surface_coordinates.csv");
+  //csv << "X,Y,Z\n";  // Correct header
 
   /* Extract surface coordinates from wing surface */
   for (int i = 0; i < config->GetnMarker_All(); i++) 
@@ -1731,7 +1737,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
         {
           CartCoord[dim] = geometry->nodes->GetCoord(iPoint, dim);
         }
-        csv << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
+        //csv << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
 
         X[N] = CartCoord[0];
         Y[N] = CartCoord[1];
@@ -1739,40 +1745,59 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
         N++;
       }
     }
-  }
-    csv.close();
+  } // End looping over markers
 
-  /* Get the span-wise extent of the FFD bounding box */
+    //csv.close();
+
+  if ( N > MAX_POINTS)
+  {
+    std::cout <<"\nExceeding max point capacity!" << std::endl;
+  }
+
+  else
+  {
+    std::cout <<"\nSurface mesh points read: " << N << std::endl;
+  }
+  
+
+
+  
+  // Get the span-wise extent of the FFD bounding box 
   su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
   su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the sevent coordinate
   unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
 
-  std::ofstream csv2("slice_locations.csv");
-  csv2 << "Station index, Location \n"; 
+  //std::ofstream csv2("slice_locations.csv");
+  //csv2 << "Station index, Location \n"; 
 
-  /* Slice spacing based on FFD lattice distribution */
+  // Slice spacing based on FFD lattice distribution 
   su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
 
-  /* Collect max-Z points at each spanwise station */
-  double Xc[MAX_POINTS], Yc[MAX_POINTS], Zc[MAX_POINTS];
+  // Collect max-Z points at each spanwise station
+  //su2double Xc[MAX_POINTS], Yc[MAX_POINTS], Zc[MAX_POINTS];
   int M = 0;
 
-  /* Loop over all slice locations */
+  // Loop over all slice locations
   for (int j = 0; j < FFD_ypoints; j++)
   {
     su2double target_y = FFD_ymin + j * dy;
-    csv2 << j <<"," << target_y << "\n";
 
+    std::cout << "Current slice locaion: " << target_y << std::endl;
+    //csv2 << j <<"," << target_y << "\n";
+
+    // Set max z to be a low value 
     double max_z = -std::numeric_limits<double>::infinity();
     int max_index = -1;
-
+  
+    // For each span-wise station, loop over all N points 
     for (int i = 0; i < N; ++i)
-    {
+    {   
       if(std::abs(Y[i] - target_y) < 1e-2 && Z[i] > max_z)
       {
         max_z = Z[i];
         max_index = i;
       }
+        
     }
     if (max_index != -1)
     {
@@ -1781,24 +1806,37 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
       Zc[M] = Z[max_index];
       M++;
     }
+  } // End loop over all spanwise stations 
+    
+  
+  if (M < 2)
+  {
+    std::cerr << "Not enough points to compute tangents";
+    return;
   }
-  csv2.close();
+  else
+  {
+    std::cout <<"Number of M points: " << M << std::endl;
+  }
+  //csv2.close();
 
-  /* Compute central finite differnece as tangent approximation using M points */
+  
+ 
+   //Compute central finite differnece as tangent approximation using M points
   std::ofstream outfile("tangent_normals_output.csv");
   outfile << "X,Y,Z,Tangent_X,Tangent_Y,Tangent_Z,Normal_Y,Normal_Z\n";
-  
-  for (int i = 0; i < N; ++i)
+
+  for (int i = 0; i < M; ++i)
   {
     double tangent[3], normal[2];
-
-    if (i ==0)
+   
+    if (i ==0 && M>=2)
     {
       tangent[0] = Xc[1] - Xc[0];
       tangent[1] = Yc[1] - Yc[0];
       tangent[2] = Zc[1] - Zc[0];
     }
-    else if (i == M -1)
+    else if (i == M -1 && M >= 2)
     {
       tangent[0] = Xc[M-1] - Xc[M-2];
       tangent[1] = Yc[M-1] - Yc[M-2];
@@ -1811,8 +1849,10 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
       tangent[2] = Zc[i+1] - Zc[i-1];
     }
 
+    //std::cout << "len " << std::endl;
     double len  = std::sqrt(tangent[0]*tangent[0] + tangent[1]*tangent[1]+ tangent[2]*tangent[2]);
 
+    
     tangent[0] /=len;
     tangent[1] /=len;
     tangent[2] /=len;
@@ -1823,14 +1863,34 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
 
     normal[0] = -tz / mag;
     normal[1] =  ty / mag;
-
+      
+    if (std::isnan(tangent[0]) || std::isnan(tangent[1]) || std::isnan(tangent[2]) ||
+            std::isnan(normal[0]) || std::isnan(normal[1]))
+            {
+              std::cout << "NaN encountered at index " << i << ". Skipping.";
+              continue;
+            }
+    
+            
+            std::cout << "Index: " << i << "Tangent: " << tangent[0] << tangent[1] << tangent[2] << std::endl;
+    
     outfile << std::fixed << std::setprecision(6)
                 << Xc[i] << "," << Yc[i] << "," << Zc[i] << ","
                 << tangent[0] << "," << tangent[1] << "," << tangent[2] << ","
                 << normal[0] << "," << normal[1] << "\n";
+    
   }
 
+  
+  
   std::cout << "3D spline-based tangent and normal vectors written to: tangent_normals_output.csv" << std::endl;
+  delete[] X;
+  delete[] Y;
+  delete[] Z;
+  delete[] Xc;
+  delete[] Yc;
+  delete[] Zc;
+
 }
 
 
