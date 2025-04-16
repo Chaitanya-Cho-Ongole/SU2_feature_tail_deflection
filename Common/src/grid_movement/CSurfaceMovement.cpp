@@ -1786,24 +1786,45 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     //std::cout << "Current slice locaion: " << target_y << std::endl;
     csv2 << j <<"," << target_y << "\n";
 
-    // Set max z to be a low value 
-    double max_z = -std::numeric_limits<double>::infinity();
+    // Set min and max z to infinity
+    su2double max_z = -std::numeric_limits<double>::infinity();
+    su2double min_z = std::numeric_limits<double>::infinity();
+    int count = 0;
+    // Z centeroid
+    su2double avg_z = 0.0;
     int max_index = -1;
   
     // For each span-wise station, loop over all N points 
     for (int i = 0; i < N; ++i)
-    {   
-      if(std::abs(Y[i] - target_y) < 1e-2 && Z[i] > max_z)
+    { 
+      // If selcting max_z  
+      //if(std::abs(Y[i] - target_y) < 1e-2 && Z[i] > max_z)
+     // {
+     //   max_z = Z[i];
+     //   max_index = i;
+     // }
+
+     // If seleting z-centroid
+      if (std::abs(Y[i] - target_y) < 1e-2)
       {
-        max_z = Z[i];
+        if (Z[i] > max_z) max_z = Z[i];
+        if (Z[i] < min_z) min_z = Z[i];
         max_index = i;
+        count++;
       }
+    }
+
+    if (count > 0)
+    {
+      std::cout <<"Computing Z-centroid!" << std::endl;
+      avg_z = 0.5 * (max_z + min_z);
     }
     if (max_index != -1)
     {
       Xc[M] = X[max_index];
       Yc[M] = Y[max_index];
-      Zc[M] = Z[max_index];
+      //Zc[M] = Z[max_index]; // if using max z
+      Zc[M] = avg_z;
       M++;
     }
   } // End loop over all spanwise stations 
@@ -1811,14 +1832,14 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   
   if (M < 2)
   {
-    std::cerr << "Not enough points to compute tangents";
+    std::cerr << "WARNING: NOT ENOUGH POINTS TO COMPUTE TANGENTS!";
     return;
   }
   else
   {
     std::cout <<"Number of M points: " << M << std::endl;
   }
-  //csv2.close();
+  csv2.close();
 
   
  
@@ -1870,9 +1891,6 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
               std::cout << "NaN encountered at index " << i << ". Skipping.";
               continue;
             }
-    
-            
-            std::cout << "Index: " << i << "Tangent: " << tangent[0] << tangent[1] << tangent[2] << std::endl;
     
     outfile << std::fixed << std::setprecision(6)
                 << Xc[i] << "," << Yc[i] << "," << Zc[i] << ","
