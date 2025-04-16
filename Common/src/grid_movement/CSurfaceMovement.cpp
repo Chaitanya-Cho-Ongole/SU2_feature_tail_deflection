@@ -1719,8 +1719,9 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
 
   int N = 0;
 
-  //std::ofstream csv("surface_coordinates.csv");
-  //csv << "X,Y,Z\n";  // Correct header
+  // File object to write surface meshes 
+  std::ofstream csv("surface_coordinates.csv");
+  csv << "X,Y,Z\n";
 
   /* Extract surface coordinates from wing surface */
   for (int i = 0; i < config->GetnMarker_All(); i++) 
@@ -1737,7 +1738,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
         {
           CartCoord[dim] = geometry->nodes->GetCoord(iPoint, dim);
         }
-        //csv << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
+        csv << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
 
         X[N] = CartCoord[0];
         Y[N] = CartCoord[1];
@@ -1747,16 +1748,16 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     }
   } // End looping over markers
 
-    //csv.close();
+    csv.close();
 
   if ( N > MAX_POINTS)
   {
-    std::cout <<"\nExceeding max point capacity!" << std::endl;
+    std::cout <<"\n Exceeding max point capacity!" << std::endl;
   }
 
   else
   {
-    std::cout <<"\nSurface mesh points read: " << N << std::endl;
+    std::cout <<"\n Surface mesh points read: " << N << std::endl;
   }
   
 
@@ -1767,14 +1768,14 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the sevent coordinate
   unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
 
-  //std::ofstream csv2("slice_locations.csv");
-  //csv2 << "Station index, Location \n"; 
+  // File object to to write slice locations 
+  std::ofstream csv2("slice_locations.csv");
+  csv2 << "Station index, Location \n"; 
 
   // Slice spacing based on FFD lattice distribution 
   su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
 
   // Collect max-Z points at each spanwise station
-  //su2double Xc[MAX_POINTS], Yc[MAX_POINTS], Zc[MAX_POINTS];
   int M = 0;
 
   // Loop over all slice locations
@@ -1782,8 +1783,8 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   {
     su2double target_y = FFD_ymin + j * dy;
 
-    std::cout << "Current slice locaion: " << target_y << std::endl;
-    //csv2 << j <<"," << target_y << "\n";
+    //std::cout << "Current slice locaion: " << target_y << std::endl;
+    csv2 << j <<"," << target_y << "\n";
 
     // Set max z to be a low value 
     double max_z = -std::numeric_limits<double>::infinity();
@@ -1797,7 +1798,6 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
         max_z = Z[i];
         max_index = i;
       }
-        
     }
     if (max_index != -1)
     {
@@ -1863,7 +1863,7 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
 
     normal[0] = -tz / mag;
     normal[1] =  ty / mag;
-      
+
     if (std::isnan(tangent[0]) || std::isnan(tangent[1]) || std::isnan(tangent[2]) ||
             std::isnan(normal[0]) || std::isnan(normal[1]))
             {

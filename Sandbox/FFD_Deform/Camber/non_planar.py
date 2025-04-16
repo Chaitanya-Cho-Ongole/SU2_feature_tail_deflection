@@ -25,7 +25,7 @@ def plot_3d_surface_with_slices(surface_df, y_slices):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     
-    ax.scatter(surface_df['X'], surface_df['Y'], surface_df['Z'], c='gray', alpha=0.05, s=0.5)
+    ax.scatter(surface_df['X'], surface_df['Y'], surface_df['Z'], c='gray', alpha=0.05, s=1.5)
 
     x_min, x_max = surface_df['X'].min(), surface_df['X'].max()
     z_min, z_max = surface_df['Z'].min(), surface_df['Z'].max()
@@ -33,7 +33,7 @@ def plot_3d_surface_with_slices(surface_df, y_slices):
     for y in y_slices:
         X_plane, Z_plane = np.meshgrid([x_min, x_max], [z_min, z_max])
         Y_plane = np.full_like(X_plane, y)
-        ax.plot_surface(X_plane, Y_plane, Z_plane, color='blue', alpha=0.05, edgecolor='none')
+        ax.plot_surface(X_plane, Y_plane, Z_plane, color='C0', alpha=0.05, edgecolor='none')
 
     ax.set_xlabel('X', fontsize=22, fontname="Times New Roman")
     ax.set_ylabel('Y', fontsize=22, fontname="Times New Roman")
@@ -46,6 +46,25 @@ def plot_3d_surface_with_slices(surface_df, y_slices):
     F.set_size_inches(Size[0]*1.5, Size[1]*1.5, forward=True)
     
     
+    plt.tight_layout()
+    plt.show()
+    
+def plot_xy_projection_with_slices(surface_df, y_slices):
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Scatter plot in X-Y plane (ignoring Z)
+    ax.scatter(surface_df['X'], surface_df['Y'], c='gray', alpha=0.05, s=1.5)
+
+    # Plot horizontal lines at each y-slice location
+    x_min, x_max = surface_df['X'].min(), surface_df['X'].max()
+    for y in y_slices:
+        ax.plot([x_min, x_max], [y, y], color='blue', alpha=0.3, linestyle='--')
+
+    ax.set_xlabel('X', fontsize=18, fontname="Times New Roman")
+    ax.set_ylabel('Y', fontsize=18, fontname="Times New Roman")
+    ax.grid(True)
+    ax.set_aspect('equal', 'box')
+
     plt.tight_layout()
     plt.show()
 
@@ -129,8 +148,11 @@ def main():
     surface_df, y_slices = load_data(surface_path, slice_path)
     max_z_points = extract_max_z(surface_df, y_slices)
 
-    #plot_3d_surface_with_slices(surface_df, y_slices)
-    plot_yz_projection_with_vectors(max_z_points)
+    plot_3d_surface_with_slices(surface_df, y_slices)
+    #plot_yz_projection_with_vectors(max_z_points)
+    
+    #plot_xy_projection_with_slices(surface_df, y_slices)
+    
 
 if __name__ == "__main__":
     main()
