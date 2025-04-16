@@ -18,7 +18,7 @@ def extract_max_z(surface_df, y_slices, delta_y=0.01):
         if not slice_points.empty:
             max_idx = slice_points['Z'].idxmax()
             max_point = surface_df.loc[max_idx]
-            max_z_points.append((max_point['Y'], max_point['Z']))
+            max_z_points.append((max_point['X'], max_point['Y'], max_point['Z']))
     return np.array(max_z_points)
 
 def plot_3d_surface_with_slices(surface_df, y_slices):
@@ -50,54 +50,77 @@ def plot_3d_surface_with_slices(surface_df, y_slices):
     plt.show()
 
 def plot_yz_projection_with_vectors(max_z_points):
-    fig, ax = plt.subplots(dpi=300)
+    from scipy.interpolate import splprep, splev
+
+    fig, ax = plt.subplots()
     if max_z_points.size > 0:
-        ax.scatter(max_z_points[:, 0], max_z_points[:, 1], color='red')
+        ax.scatter(max_z_points[:, 1], max_z_points[:, 2], color='red')
 
-        # Fit spline and compute derivatives at slice locations only
-        spline = UnivariateSpline(max_z_points[:, 0], max_z_points[:, 1], s=0)
-        y_eval = max_z_points[:, 0]
-        z_eval = spline(y_eval)
-        dz_dy = spline.derivative()(y_eval)
+        # Fit parametric 3D spline: [X(t), Y(t), Z(t)]
+        tck, u = splprep([max_z_points[:, 0], max_z_points[:, 1], max_z_points[:, 2]], s=0)
+        from scipy.optimize import root_scalar
 
-        # Compute normalized tangent and normal vectors
-        tangent_vectors = np.vstack([np.ones_like(dz_dy), dz_dy]).T
-        normal_vectors = np.vstack([-dz_dy, np.ones_like(dz_dy)]).T
-        tangent_vectors /= np.linalg.norm(tangent_vectors, axis=1)[:, np.newaxis]
-        normal_vectors /= np.linalg.norm(normal_vectors, axis=1)[:, np.newaxis]
+        # Find parameter values u_exact corresponding to exact y-slice locations
+        y_targets = max_z_points[:, 1]
+        u_exact = []
+        for y_target in y_targets:
+            res = root_scalar(lambda u_: splev(u_, tck)[1] - y_target, bracket=[0, 1], method='brentq')
+            u_exact.append(res.root)
+        u_exact = np.array(u_exact)
 
-        # Save vectors to CSV for slice locations only
+        x_eval, y_eval, z_eval = splev(u_exact, tck)
+        dx, dy, dz = splev(u_exact, tck, der=1)
+
+        # Tangent vectors in 3D
+        tangents = np.vstack([dx, dy, dz]).T
+        tangents /= np.linalg.norm(tangents, axis=1)[:, np.newaxis]
+
+        # Approximate normal vectors (2D projection into Y-Z)
+        tangent_yz = tangents[:, 1:3]
+        normals_yz = np.vstack([-tangent_yz[:, 1], tangent_yz[:, 0]]).T
+        normals_yz /= np.linalg.norm(normals_yz, axis=1)[:, np.newaxis]
+
+        # Save 3D tangent vectors at each slice point
         output_df = pd.DataFrame({
+            #'X': x_eval,
             'Y': y_eval,
-            'Z': z_eval,
-            'Tangent_Y': tangent_vectors[:, 0],
-            'Tangent_Z': tangent_vectors[:, 1],
-            'Normal_Y': normal_vectors[:, 0],
-            'Normal_Z': normal_vectors[:, 1],
+            #'Z': z_eval,
+            'Tangent_X': tangents[:, 0],
+            'Tangent_Y': tangents[:, 1],
+            'Tangent_Z': tangents[:, 2],
+            #'Normal_Y': normals_yz[:, 0],
+            #'Normal_Z': normals_yz[:, 1],
         })
         output_df.to_csv("spline_vectors_at_slices.csv", index=False)
 
-        # Plot quivers
-        ax.plot(y_eval, z_eval, color='black', label='Spline at Slice Points')
+        # Plot projection and vectors in Y-Z plane
+        ax.plot(y_eval, z_eval, color='black')
+        skip = 1
         ax.quiver(
-            y_eval, z_eval,
-            normal_vectors[:, 0], normal_vectors[:, 1],
-            angles='xy', scale_units='xy', scale=3, color='blue', width=0.007, label='Normal Vectors'
+            y_eval[::skip], z_eval[::skip],
+            normals_yz[::skip, 0], normals_yz[::skip, 1],
+            angles='xy', scale_units='xy', scale=1, color='C2', width=0.005, label='Normal Vectors'
         )
         ax.quiver(
-            y_eval, z_eval,
-            tangent_vectors[:, 0], tangent_vectors[:, 1],
-            angles='xy', scale_units='xy', scale=3, color='green', width=0.007, label='Tangent Vectors'
+            y_eval[::skip], z_eval[::skip],
+            tangent_yz[::skip, 0], tangent_yz[::skip, 1],
+            angles='xy', scale_units='xy', scale=1, color='C0', width=0.005, label='Tangent Vectors'
         )
 
-        ax.set_title('Y-Z Projection with Tangent and Normal Vectors')
-        ax.set_xlabel('Y')
-        ax.set_ylabel('Z')
+        
+        ax.set_xlabel('Y',  fontsize=22, fontname="Times New Roman")
+        ax.set_ylabel('Z',  fontsize=22, fontname="Times New Roman")
         ax.set_aspect('equal', adjustable='box')
-        ax.legend()
-        ax.grid(True)
-    plt.tight_layout()
-    plt.show()
+        #ax.legend()
+        ax.grid(False)
+        
+        F = plt.gcf()
+        Size = F.get_size_inches()
+        F.set_size_inches(Size[0]*1.5, Size[1]*1.5, forward=True)
+    
+    
+        plt.tight_layout()
+        plt.show()
 
 def main():
     surface_path = "surface_coordinates.csv"
@@ -106,7 +129,7 @@ def main():
     surface_df, y_slices = load_data(surface_path, slice_path)
     max_z_points = extract_max_z(surface_df, y_slices)
 
-    plot_3d_surface_with_slices(surface_df, y_slices)
+    #plot_3d_surface_with_slices(surface_df, y_slices)
     plot_yz_projection_with_vectors(max_z_points)
 
 if __name__ == "__main__":

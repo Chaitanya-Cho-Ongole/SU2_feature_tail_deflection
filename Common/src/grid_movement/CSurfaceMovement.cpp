@@ -29,6 +29,11 @@
 #include "../../include/toolboxes/C1DInterpolation.hpp"
 #include "../../include/toolboxes/geometry_toolbox.hpp"
 #include <fstream>
+#include <sstream>
+#include <cmath>
+#include <iomanip>
+#include <limits>
+
 
 CSurfaceMovement::CSurfaceMovement() : CGridMovement() {
   size = SU2_MPI::GetSize();
@@ -1703,9 +1708,15 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
 {
   
   su2double CartCoord[3];
+
+  #define MAX_POINTS 10000
+  double X[MAX_POINTS], Y[MAX_POINTS], Z[MAX_POINTS];
+  int N = 0;
+
   std::ofstream csv("surface_coordinates.csv");
   csv << "X,Y,Z\n";  // Correct header
 
+  /* Extract surface coordinates from wing surface */
   for (int i = 0; i < config->GetnMarker_All(); i++) 
   {
     if (config->GetMarker_All_TagBound(i) == "wing") 
@@ -1721,13 +1732,17 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
           CartCoord[dim] = geometry->nodes->GetCoord(iPoint, dim);
         }
         csv << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
+
+        X[N] = CartCoord[0];
+        Y[N] = CartCoord[1];
+        Z[N] = CartCoord[2];
+        N++;
       }
     }
   }
-
     csv.close();
 
-  /* Get the Y-extent of the FFD bounding box */
+  /* Get the span-wise extent of the FFD bounding box */
   su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
   su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the sevent coordinate
   unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
@@ -1738,18 +1753,84 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   /* Slice spacing based on FFD lattice distribution */
   su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
 
-  /* Loop over all slice locations */
+  /* Collect max-Z points at each spanwise station */
+  double Xc[MAX_POINTS], Yc[MAX_POINTS], Zc[MAX_POINTS];
+  int M = 0;
 
+  /* Loop over all slice locations */
   for (int j = 0; j < FFD_ypoints; j++)
   {
     su2double target_y = FFD_ymin + j * dy;
-
     csv2 << j <<"," << target_y << "\n";
-  }
 
+    double max_z = -std::numeric_limits<double>::infinity();
+    int max_index = -1;
+
+    for (int i = 0; i < N; ++i)
+    {
+      if(std::abs(Y[i] - target_y) < 1e-2 && Z[i] > max_z)
+      {
+        max_z = Z[i];
+        max_index = i;
+      }
+    }
+    if (max_index != -1)
+    {
+      Xc[M] = X[max_index];
+      Yc[M] = Y[max_index];
+      Zc[M] = Z[max_index];
+      M++;
+    }
+  }
   csv2.close();
 
+  /* Compute central finite differnece as tangent approximation using M points */
+  std::ofstream outfile("tangent_normals_output.csv");
+  outfile << "X,Y,Z,Tangent_X,Tangent_Y,Tangent_Z,Normal_Y,Normal_Z\n";
+  
+  for (int i = 0; i < N; ++i)
+  {
+    double tangent[3], normal[2];
 
+    if (i ==0)
+    {
+      tangent[0] = Xc[1] - Xc[0];
+      tangent[1] = Yc[1] - Yc[0];
+      tangent[2] = Zc[1] - Zc[0];
+    }
+    else if (i == M -1)
+    {
+      tangent[0] = Xc[M-1] - Xc[M-2];
+      tangent[1] = Yc[M-1] - Yc[M-2];
+      tangent[2] = Zc[M-1] - Zc[M-2];
+    }
+    else
+    {
+      tangent[0] = Xc[i+1] - Xc[i-1];
+      tangent[1] = Yc[i+1] - Yc[i-1];
+      tangent[2] = Zc[i+1] - Zc[i-1];
+    }
+
+    double len  = std::sqrt(tangent[0]*tangent[0] + tangent[1]*tangent[1]+ tangent[2]*tangent[2]);
+
+    tangent[0] /=len;
+    tangent[1] /=len;
+    tangent[2] /=len;
+
+    double ty = tangent[1];
+    double tz = tangent[2];
+    double mag = std::sqrt(ty * ty + tz * tz);
+
+    normal[0] = -tz / mag;
+    normal[1] =  ty / mag;
+
+    outfile << std::fixed << std::setprecision(6)
+                << Xc[i] << "," << Yc[i] << "," << Zc[i] << ","
+                << tangent[0] << "," << tangent[1] << "," << tangent[2] << ","
+                << normal[0] << "," << normal[1] << "\n";
+  }
+
+  std::cout << "3D spline-based tangent and normal vectors written to: tangent_normals_output.csv" << std::endl;
 }
 
 
