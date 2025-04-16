@@ -1704,7 +1704,7 @@ void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const 
 }
 
 
-void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, bool ResetDef) 
+su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, bool ResetDef) 
 {
  
   su2double CartCoord[3];
@@ -1847,10 +1847,16 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   std::ofstream outfile("tangent_normals_output.csv");
   outfile << "X,Y,Z,Tangent_X,Tangent_Y,Tangent_Z,Normal_Y,Normal_Z\n";
 
+  // Defining this on heap
+
+  su2double** tangent_normal_array = new su2double*[M];
+
   for (int i = 0; i < M; ++i)
   {
     double tangent[3], normal[2];
-   
+    tangent_normal_array[i] = new su2double[7]; // [FFD degree, slice_loc, Tx, Ty, Tz, Ny Nz]
+
+
     if (i ==0 && M>=2)
     {
       tangent[0] = Xc[1] - Xc[0];
@@ -1892,6 +1898,14 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
               continue;
             }
     
+    tangent_normal_array[i][0] = i;             // FFD lattice degree  
+    tangent_normal_array[i][1] = Yc[i];         // Spanwise Y-location
+    tangent_normal_array[i][2] = tangent[0];    // Tx
+    tangent_normal_array[i][3] = tangent[1];    // Ty
+    tangent_normal_array[i][4] = tangent[2];    // Tz
+    tangent_normal_array[i][5] = normal[0];     // Ny
+    tangent_normal_array[i][6] = normal[1];         
+    
     outfile << std::fixed << std::setprecision(6)
                 << Xc[i] << "," << Yc[i] << "," << Zc[i] << ","
                 << tangent[0] << "," << tangent[1] << "," << tangent[2] << ","
@@ -1899,8 +1913,6 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
     
   }
 
-  
-  
   std::cout << "3D spline-based tangent and normal vectors written to: tangent_normals_output.csv" << std::endl;
   delete[] X;
   delete[] Y;
@@ -1908,6 +1920,36 @@ void CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFr
   delete[] Xc;
   delete[] Yc;
   delete[] Zc;
+
+
+  #include <iomanip>  // already used for std::setprecision
+
+std::cout << std::setw(3)  << "i"
+          << std::setw(10) << "Yc"
+          << std::setw(12) << "Tx"
+          << std::setw(12) << "Ty"
+          << std::setw(12) << "Tz"
+          << std::setw(12) << "Ny"
+          << std::setw(12) << "Nz" << std::endl;
+
+for (int i = 0; i < M; ++i)
+{
+  std::cout << std::fixed << std::setprecision(7)
+            << std::setw(3) << tangent_normal_array[i][0]
+            << std::setw(10) << tangent_normal_array[i][1]
+            << std::setw(12) << tangent_normal_array[i][2]
+            << std::setw(12) << tangent_normal_array[i][3]
+            << std::setw(12) << tangent_normal_array[i][4]
+            << std::setw(12) << tangent_normal_array[i][5]
+            << std::setw(12) << tangent_normal_array[i][6] << std::endl;
+}
+
+
+  for (int i = 0; i < M; ++i)
+{
+  delete[] tangent_normal_array[i];
+}
+delete[] tangent_normal_array;
 
 }
 
