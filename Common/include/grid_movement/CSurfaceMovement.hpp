@@ -33,7 +33,7 @@
 /*!
  * \class CSurfaceMovement
  * \brief Class for moving the surface numerical grid.
- * \author F. Palacios, T. Economon.
+ * \author F. Palacios, T. Economon., P.Ranjan
  */
 class CSurfaceMovement : public CGridMovement {
  protected:
@@ -280,8 +280,9 @@ class CSurfaceMovement : public CGridMovement {
    * \param[in] config - Definition of the particular problem.
    * \param[in] FFDBox - Array with all the free forms FFDBoxes of the computation.
    * \param[in] iFFDBox - Index of FFD box.
+   * \return A 2D array consiting of spanwise FFD index and its corresponding tangent + normals
    */
-  void getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
+  su2double** getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
     bool ResetDef);
 
     /*!

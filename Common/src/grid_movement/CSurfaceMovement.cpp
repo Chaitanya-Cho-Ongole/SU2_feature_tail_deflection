@@ -1847,8 +1847,7 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
   std::ofstream outfile("tangent_normals_output.csv");
   outfile << "X,Y,Z,Tangent_X,Tangent_Y,Tangent_Z,Normal_Y,Normal_Z\n";
 
-  // Defining this on heap
-
+  // Define the tangent normal array on heap 
   su2double** tangent_normal_array = new su2double*[M];
 
   for (int i = 0; i < M; ++i)
