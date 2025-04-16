@@ -35,6 +35,7 @@
 #include <limits>
 
 
+
 #define MAX_POINTS 1000000
 
 CSurfaceMovement::CSurfaceMovement() : CGridMovement() {
@@ -308,7 +309,39 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
             {
               std::cout <<"Computing spanwise normals...";
             }
-            getNormalVector(geometry, config, FFDBox[iFFDBox], iFFDBox, false);
+            // Initialize N_normals to zero. getNormalVector updates it.
+            int N_normals = 0;
+            su2double** normal_array = getNormalVector(geometry, config, FFDBox[iFFDBox], iFFDBox, N_normals);
+      
+
+            std::cout << std::setw(12)  << "i"
+                      << std::setw(10) << "Yc"
+                      << std::setw(12) << "Tx"
+                      << std::setw(12) << "Ty"
+                      << std::setw(12) << "Tz"
+                      << std::setw(12) << "Ny"
+                      << std::setw(12) << "Nz" << std::endl;
+            
+            for (int i = 0; i < N_normals; ++i)
+            {
+              std::cout << std::fixed << std::setprecision(7)
+                        << std::setw(3) << normal_array[i][0]
+                        << std::setw(10) << normal_array[i][1]
+                        << std::setw(12) << normal_array[i][2]
+                        << std::setw(12) << normal_array[i][3]
+                        << std::setw(12) << normal_array[i][4]
+                        << std::setw(12) << normal_array[i][5]
+                        << std::setw(12) << normal_array[i][6] << std::endl;
+            }
+
+
+
+            // For now, delete normal_array here
+            for (int i = 0; i < N_normals; ++i)
+            {
+              delete[] normal_array[i];
+            }
+            delete[] normal_array;
 
             if (rank == MASTER_NODE)
             {
@@ -1704,7 +1737,7 @@ void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const 
 }
 
 
-su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, bool ResetDef) 
+su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, int& N_out) 
 {
  
   su2double CartCoord[3];
@@ -1767,6 +1800,8 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
   su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
   su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the sevent coordinate
   unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
+
+
 
   // File object to to write slice locations 
   std::ofstream csv2("slice_locations.csv");
@@ -1833,7 +1868,6 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
   if (M < 2)
   {
     std::cerr << "WARNING: NOT ENOUGH POINTS TO COMPUTE TANGENTS!";
-    return;
   }
   else
   {
@@ -1920,36 +1954,17 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
   delete[] Yc;
   delete[] Zc;
 
+N_out = M;
 
-  #include <iomanip>  // already used for std::setprecision
+return tangent_normal_array;
 
-std::cout << std::setw(3)  << "i"
-          << std::setw(10) << "Yc"
-          << std::setw(12) << "Tx"
-          << std::setw(12) << "Ty"
-          << std::setw(12) << "Tz"
-          << std::setw(12) << "Ny"
-          << std::setw(12) << "Nz" << std::endl;
-
-for (int i = 0; i < M; ++i)
-{
-  std::cout << std::fixed << std::setprecision(7)
-            << std::setw(3) << tangent_normal_array[i][0]
-            << std::setw(10) << tangent_normal_array[i][1]
-            << std::setw(12) << tangent_normal_array[i][2]
-            << std::setw(12) << tangent_normal_array[i][3]
-            << std::setw(12) << tangent_normal_array[i][4]
-            << std::setw(12) << tangent_normal_array[i][5]
-            << std::setw(12) << tangent_normal_array[i][6] << std::endl;
-}
-
-
+/**
   for (int i = 0; i < M; ++i)
 {
   delete[] tangent_normal_array[i];
 }
 delete[] tangent_normal_array;
-
+*/
 }
 
 

@@ -283,7 +283,7 @@ class CSurfaceMovement : public CGridMovement {
    * \return A 2D array consiting of spanwise FFD index and its corresponding tangent + normals
    */
   su2double** getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
-    bool ResetDef);
+    int& N_out);
 
     /*!
    * \brief Compute the "best fit" plane normal to a wing slice locaton
