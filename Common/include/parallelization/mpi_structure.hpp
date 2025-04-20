@@ -208,6 +208,10 @@ class CBaseMPIWrapper {
     MPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
   }
 
+  static inline void Gatherv(const void* sendbuf, int sendcount, Datatype sendtype, void* recvbuf, const int* recvcounts, const int* displs, Datatype recvtype, int root, Comm comm) {
+    MPI_Gatherv(sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs, recvtype, root, comm);
+  }
+
   static inline void Gather(const void* sendbuf, int sendcnt, Datatype sendtype, void* recvbuf, int recvcnt,
                             Datatype recvtype, int root, Comm comm) {
     MPI_Gather(sendbuf, sendcnt, sendtype, recvbuf, recvcnt, recvtype, root, comm);
@@ -227,6 +231,8 @@ class CBaseMPIWrapper {
                                 const int* recvcounts, const int* displs, Datatype recvtype, Comm comm) {
     MPI_Allgatherv(sendbuf, sendcount, sendtype, recvbuf, recvcounts, displs, recvtype, comm);
   }
+
+
 
   static inline void Alltoall(const void* sendbuf, int sendcount, Datatype sendtype, void* recvbuf, int recvcount,
                               Datatype recvtype, Comm comm) {
@@ -265,7 +271,8 @@ typedef MPI_Comm SU2_Comm;
  * \brief MPI wrapper functions for MediPack tool.
  */
 
-class CMediMPIWrapper : public CBaseMPIWrapper {
+class CMediMPIWrapper : public CBaseMPIWrapper 
+{
  public:
   typedef AMPI_Request Request;
   typedef AMPI_Status Status;

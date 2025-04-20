@@ -1691,6 +1691,7 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
   }
 }
 
+
 void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const su2double* y_vals, const su2double* z_vals, int N, su2double* normal_out)
 {
   if (N < 3) {
@@ -1791,27 +1792,40 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
     {
       displs[i] = displs[i-1] + recv_counts[i-1];
     }
-    total_points = displs[size - 1] + recv_counts[world_size - 1];
+    total_points = displs[size - 1] + recv_counts[size - 1];
+  }
 
+  // Allocate global arrays for gathered coordinates on rank 0
+  su2double* X_global = nullptr;
+  su2double* Y_global = nullptr;
+  su2double* Z_global = nullptr;
+
+  if (rank == MASTER_NODE) 
+  {
+    X_global = new su2double[total_points];
+    Y_global = new su2double[total_points];
+    Z_global = new su2double[total_points];
+  }
+
+   // Gather local coordinates to rank 0
+   SU2_MPI::Gatherv(X_local, N_local, MPI_DOUBLE, X_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+   SU2_MPI::Gatherv(Y_local, N_local, MPI_DOUBLE, Y_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+   SU2_MPI::Gatherv(Z_local, N_local, MPI_DOUBLE, Z_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+
+  // Free local coordinate arrays on remove ranks
+  delete[] X_local;
+  delete[] Y_local;
+  delete[] Z_local;
+
+  if (rank == MASTER_NODE)
+  {
+    std::cout << "Total points collected: " << total_points << std::endl;
   }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-*/
+  // Allocate pointer for tangent/normal array, only filled on rank 0
+  su2double** tangent_normal_array = nullptr;
+  int M = 0;
 }
 
 
