@@ -1825,7 +1825,147 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
 
   // Allocate pointer for tangent/normal array, only filled on rank 0
   su2double** tangent_normal_array = nullptr;
-  int M = 0;
+  //int M = 0;
+
+   // Broadcast the number of output points (M) to all ranks
+   //SU2_MPI::Bcast(&M, 1, MPI_INT, 0, SU2_MPI::GetComm());
+
+   //su2double* flat_array = new su2double[M * 7];
+
+   if (rank == MASTER_NODE)
+   {
+    // Begin computing surface normals + tnagents at root
+
+    su2double* Xc = new su2double[MAX_POINTS];
+    su2double* Yc = new su2double[MAX_POINTS];
+    su2double* Zc = new su2double[MAX_POINTS];
+
+    // Get the span-wise extent of the FFD bounding box 
+    su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
+    su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the seventh coordinate
+    unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
+
+    std::cout << "FFD_ymin: " << FFD_ymin <<std::endl;
+    std::cout << "FFD_ymax: " << FFD_ymax <<std::endl;
+    std::cout << "FFD_ypoints: " << FFD_ypoints <<std::endl;
+
+     // Slice spacing based on FFD lattice distribution 
+     su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
+
+    int M = 0;
+
+    // Loop over all slice locations
+    for (int j = 0; j < FFD_ypoints; j++)
+    {
+      su2double target_y = FFD_ymin + j * dy;
+
+      // Set min and max z to infinity
+      su2double max_z = -std::numeric_limits<double>::infinity();
+      su2double min_z = std::numeric_limits<double>::infinity();
+
+      int count = 0;
+
+      // Z centeroid
+      su2double avg_z = 0.0;
+      int max_index = -1;
+
+      // For each span-wise station, loop over all "total_points" points 
+      for (int i = 0; i < total_points; ++i)
+      {
+         // If seleting z-centroid
+         if (std::abs(Y_global[i] - target_y) < 1e-2)
+         {
+          if (Z_global[i] > max_z) max_z = Z_global[i];
+          if (Z_global[i] < min_z) min_z = Z_global[i];
+          max_index = i;
+          count++;
+         }
+      }
+
+      if (count > 0)
+      {
+        std::cout <<"Computing Z-centroid!" << std::endl;
+        avg_z = 0.5 * (max_z + min_z);
+      }
+      if (max_index != -1)
+      {
+        Xc[M] = X_global[max_index];
+        Yc[M] = Y_global[max_index];
+        Zc[M] = avg_z;
+        M++;
+      }
+    } // End loop over all spanwise stations
+
+    if (M < 2)
+    {
+      std::cerr << "WARNING: NOT ENOUGH POINTS TO COMPUTE TANGENTS!";
+    }
+
+    else
+    {
+      std::cout <<"Number of M points: " << M << std::endl;
+    }
+
+     // Define the tangent normal array on heap 
+     su2double** tangent_normal_array = new su2double*[M];
+
+     for (int i = 0; i < M; ++i)
+     {
+      double tangent[3], normal[2];
+      tangent_normal_array[i] = new su2double[7]; // [FFD degree, slice_loc, Tx, Ty, Tz, Ny Nz]
+
+      if (i ==0 && M>=2)
+      {
+        tangent[0] = Xc[1] - Xc[0];
+        tangent[1] = Yc[1] - Yc[0];
+        tangent[2] = Zc[1] - Zc[0];
+      }
+      else if (i == M -1 && M >= 2)
+      {
+        tangent[0] = Xc[M-1] - Xc[M-2];
+        tangent[1] = Yc[M-1] - Yc[M-2];
+        tangent[2] = Zc[M-1] - Zc[M-2];
+      }
+      else
+      {
+        tangent[0] = Xc[i+1] - Xc[i-1];
+        tangent[1] = Yc[i+1] - Yc[i-1];
+        tangent[2] = Zc[i+1] - Zc[i-1];
+      }
+
+      double len  = std::sqrt(tangent[0]*tangent[0] + tangent[1]*tangent[1]+ tangent[2]*tangent[2]);
+
+      tangent[0] /=len;
+      tangent[1] /=len;
+      tangent[2] /=len;
+
+      double ty = tangent[1];
+      double tz = tangent[2];
+
+      double mag = std::sqrt(ty * ty + tz * tz);
+
+      normal[0] = -tz / mag;
+      normal[1] =  ty / mag;
+
+      if (std::isnan(tangent[0]) || std::isnan(tangent[1]) || std::isnan(tangent[2]) ||
+      std::isnan(normal[0]) || std::isnan(normal[1]))
+      {
+        std::cout << "NaN encountered at index " << i << ". Skipping.";
+        continue;
+      }
+
+      tangent_normal_array[i][0] = i;             // FFD lattice degree  
+      tangent_normal_array[i][1] = Yc[i];         // Spanwise Y-location
+      tangent_normal_array[i][2] = tangent[0];    // Tx
+      tangent_normal_array[i][3] = tangent[1];    // Ty
+      tangent_normal_array[i][4] = tangent[2];    // Tz
+      tangent_normal_array[i][5] = normal[0];     // Ny
+      tangent_normal_array[i][6] = normal[1];         
+
+
+     }
+
+   }
 }
 
 
