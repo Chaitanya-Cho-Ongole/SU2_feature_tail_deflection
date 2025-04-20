@@ -1739,231 +1739,78 @@ void CSurfaceMovement::ComputeBestFitPlaneNormal(const su2double* x_vals, const 
 
 su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, int& N_out) 
 {
- 
-  su2double CartCoord[3];
 
-  su2double* X = new su2double[MAX_POINTS];
-  su2double* Y = new su2double[MAX_POINTS];
-  su2double* Z = new su2double[MAX_POINTS];
+ // Allocate memory for local coordinates
+ su2double* X_local = new su2double[MAX_POINTS];
+ su2double* Y_local = new su2double[MAX_POINTS];
+ su2double* Z_local = new su2double[MAX_POINTS];
 
-  su2double* Xc = new su2double[MAX_POINTS];
-  su2double* Yc = new su2double[MAX_POINTS];
-  su2double* Zc = new su2double[MAX_POINTS];
+ int N_local = 0; // Number of local points
 
-  int N = 0;
-
-  // File object to write surface meshes 
-  std::ofstream csv("surface_coordinates.csv");
-  csv << "X,Y,Z\n";
-
-  /* Extract surface coordinates from wing surface */
-  for (int i = 0; i < config->GetnMarker_All(); i++) 
+ // Extract surface coordinates from the wing marker
+ for (int i = 0; i < config->GetnMarker_All(); i++) 
   {
     if (config->GetMarker_All_TagBound(i) == "wing") 
-    {
-      unsigned short nDim = geometry->GetnDim();
-     
-
-      for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++) 
       {
-        unsigned long iPoint = geometry->vertex[i][iVertex]->GetNode();
-        for (int dim = 0; dim < nDim; ++dim)
-        {
-          CartCoord[dim] = geometry->nodes->GetCoord(iPoint, dim);
-        }
-        csv << CartCoord[0] << "," << CartCoord[1] << "," << CartCoord[2] << "\n";
-
-        X[N] = CartCoord[0];
-        Y[N] = CartCoord[1];
-        Z[N] = CartCoord[2];
-        N++;
+        unsigned short nDim = geometry->GetnDim();
+        for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++) 
+          {
+            unsigned long iPoint = geometry->vertex[i][iVertex]->GetNode();
+            su2double x = geometry->nodes->GetCoord(iPoint, 0);
+            su2double y = geometry->nodes->GetCoord(iPoint, 1);
+            su2double z = geometry->nodes->GetCoord(iPoint, 2);
+            if (N_local >= MAX_POINTS) break;
+            X_local[N_local] = x;
+            Y_local[N_local] = y;
+            Z_local[N_local] = z;
+            N_local++;
+          }
       }
-    }
-  } // End looping over markers
-
-    csv.close();
-
-  if ( N > MAX_POINTS)
-  {
-    std::cout <<"\n Exceeding max point capacity!" << std::endl;
   }
 
-  else
+  // Gather the number of points from all ranks to rank 0
+  int* recv_counts = nullptr;
+  int* displs = nullptr;
+
+  if (rank == MASTER_NODE)
   {
-    std::cout <<"\n Surface mesh points read: " << N << std::endl;
-  }
-  
-
-
-  
-  // Get the span-wise extent of the FFD bounding box 
-  su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
-  su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the sevent coordinate
-  unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
-
-
-
-  // File object to to write slice locations 
-  std::ofstream csv2("slice_locations.csv");
-  csv2 << "Station index, Location \n"; 
-
-  // Slice spacing based on FFD lattice distribution 
-  su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
-
-  // Collect max-Z points at each spanwise station
-  int M = 0;
-
-  // Loop over all slice locations
-  for (int j = 0; j < FFD_ypoints; j++)
-  {
-    su2double target_y = FFD_ymin + j * dy;
-
-    //std::cout << "Current slice locaion: " << target_y << std::endl;
-    csv2 << j <<"," << target_y << "\n";
-
-    // Set min and max z to infinity
-    su2double max_z = -std::numeric_limits<double>::infinity();
-    su2double min_z = std::numeric_limits<double>::infinity();
-    int count = 0;
-    // Z centeroid
-    su2double avg_z = 0.0;
-    int max_index = -1;
-  
-    // For each span-wise station, loop over all N points 
-    for (int i = 0; i < N; ++i)
-    { 
-      // If selcting max_z  
-      //if(std::abs(Y[i] - target_y) < 1e-2 && Z[i] > max_z)
-     // {
-     //   max_z = Z[i];
-     //   max_index = i;
-     // }
-
-     // If seleting z-centroid
-      if (std::abs(Y[i] - target_y) < 1e-2)
-      {
-        if (Z[i] > max_z) max_z = Z[i];
-        if (Z[i] < min_z) min_z = Z[i];
-        max_index = i;
-        count++;
-      }
-    }
-
-    if (count > 0)
-    {
-      std::cout <<"Computing Z-centroid!" << std::endl;
-      avg_z = 0.5 * (max_z + min_z);
-    }
-    if (max_index != -1)
-    {
-      Xc[M] = X[max_index];
-      Yc[M] = Y[max_index];
-      //Zc[M] = Z[max_index]; // if using max z
-      Zc[M] = avg_z;
-      M++;
-    }
-  } // End loop over all spanwise stations 
-    
-  
-  if (M < 2)
-  {
-    std::cerr << "WARNING: NOT ENOUGH POINTS TO COMPUTE TANGENTS!";
-  }
-  else
-  {
-    std::cout <<"Number of M points: " << M << std::endl;
-  }
-  csv2.close();
-
-  
- 
-   //Compute central finite differnece as tangent approximation using M points
-  std::ofstream outfile("tangent_normals_output.csv");
-  outfile << "X,Y,Z,Tangent_X,Tangent_Y,Tangent_Z,Normal_Y,Normal_Z\n";
-
-  // Define the tangent normal array on heap 
-  su2double** tangent_normal_array = new su2double*[M];
-
-  for (int i = 0; i < M; ++i)
-  {
-    double tangent[3], normal[2];
-    tangent_normal_array[i] = new su2double[7]; // [FFD degree, slice_loc, Tx, Ty, Tz, Ny Nz]
-
-
-    if (i ==0 && M>=2)
-    {
-      tangent[0] = Xc[1] - Xc[0];
-      tangent[1] = Yc[1] - Yc[0];
-      tangent[2] = Zc[1] - Zc[0];
-    }
-    else if (i == M -1 && M >= 2)
-    {
-      tangent[0] = Xc[M-1] - Xc[M-2];
-      tangent[1] = Yc[M-1] - Yc[M-2];
-      tangent[2] = Zc[M-1] - Zc[M-2];
-    }
-    else
-    {
-      tangent[0] = Xc[i+1] - Xc[i-1];
-      tangent[1] = Yc[i+1] - Yc[i-1];
-      tangent[2] = Zc[i+1] - Zc[i-1];
-    }
-
-    //std::cout << "len " << std::endl;
-    double len  = std::sqrt(tangent[0]*tangent[0] + tangent[1]*tangent[1]+ tangent[2]*tangent[2]);
-
-    
-    tangent[0] /=len;
-    tangent[1] /=len;
-    tangent[2] /=len;
-
-    double ty = tangent[1];
-    double tz = tangent[2];
-    double mag = std::sqrt(ty * ty + tz * tz);
-
-    normal[0] = -tz / mag;
-    normal[1] =  ty / mag;
-
-    if (std::isnan(tangent[0]) || std::isnan(tangent[1]) || std::isnan(tangent[2]) ||
-            std::isnan(normal[0]) || std::isnan(normal[1]))
-            {
-              std::cout << "NaN encountered at index " << i << ". Skipping.";
-              continue;
-            }
-    
-    tangent_normal_array[i][0] = i;             // FFD lattice degree  
-    tangent_normal_array[i][1] = Yc[i];         // Spanwise Y-location
-    tangent_normal_array[i][2] = tangent[0];    // Tx
-    tangent_normal_array[i][3] = tangent[1];    // Ty
-    tangent_normal_array[i][4] = tangent[2];    // Tz
-    tangent_normal_array[i][5] = normal[0];     // Ny
-    tangent_normal_array[i][6] = normal[1];         
-    
-    outfile << std::fixed << std::setprecision(6)
-                << Xc[i] << "," << Yc[i] << "," << Zc[i] << ","
-                << tangent[0] << "," << tangent[1] << "," << tangent[2] << ","
-                << normal[0] << "," << normal[1] << "\n";
-    
+    recv_counts = new int[size];
   }
 
-  std::cout << "3D spline-based tangent and normal vectors written to: tangent_normals_output.csv" << std::endl;
-  delete[] X;
-  delete[] Y;
-  delete[] Z;
-  delete[] Xc;
-  delete[] Yc;
-  delete[] Zc;
+  SU2_MPI::Gather(&N_local, 1, MPI_INT, recv_counts, 1, MPI_INT, 0, SU2_MPI::GetComm());
 
-N_out = M;
+  // Compute total number of points and displacements on rank 0
+  int total_points = 0;
 
-return tangent_normal_array;
+  if (rank == MASTER_NODE)
+  {
+    displs = new int[size];
+    displs[0] = 0;
 
-/**
-  for (int i = 0; i < M; ++i)
-{
-  delete[] tangent_normal_array[i];
-}
-delete[] tangent_normal_array;
+    for (int i = 1; i < size; ++i)
+    {
+      displs[i] = displs[i-1] + recv_counts[i-1];
+    }
+    total_points = displs[size - 1] + recv_counts[world_size - 1];
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 */
 }
 
