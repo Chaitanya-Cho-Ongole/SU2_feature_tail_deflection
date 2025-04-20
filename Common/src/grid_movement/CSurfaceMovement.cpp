@@ -313,7 +313,7 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
             int N_normals = 0;
             su2double** normal_array = getNormalVector(geometry, config, FFDBox[iFFDBox], iFFDBox, N_normals);
       
-
+            /*
             std::cout << std::setw(12)  << "i"
                       << std::setw(10) << "Yc"
                       << std::setw(12) << "Tx"
@@ -334,7 +334,7 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
                         << std::setw(12) << normal_array[i][6] << std::endl;
             }
 
-
+            */
 
             // For now, delete normal_array here
             for (int i = 0; i < N_normals; ++i)
@@ -1812,7 +1812,7 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
    SU2_MPI::Gatherv(Y_local, N_local, MPI_DOUBLE, Y_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
    SU2_MPI::Gatherv(Z_local, N_local, MPI_DOUBLE, Z_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
 
-  // Free local coordinate arrays on remove ranks
+  // Free local coordinate arrays on remote ranks
   delete[] X_local;
   delete[] Y_local;
   delete[] Z_local;
@@ -1825,7 +1825,7 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
 
   // Allocate pointer for tangent/normal array, only filled on rank 0
   su2double** tangent_normal_array = nullptr;
-  //int M = 0;
+  int M = 0;
 
    // Broadcast the number of output points (M) to all ranks
    //SU2_MPI::Bcast(&M, 1, MPI_INT, 0, SU2_MPI::GetComm());
@@ -1834,6 +1834,11 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
 
    if (rank == MASTER_NODE)
    {
+
+    //Compute central finite differnece as tangent approximation using M points
+    std::ofstream outfile("tangent_normals_output.csv");
+    outfile << "X,Y,Z,Tangent_X,Tangent_Y,Tangent_Z,Normal_Y,Normal_Z\n";
+
     // Begin computing surface normals + tnagents at root
 
     su2double* Xc = new su2double[MAX_POINTS];
@@ -1849,10 +1854,8 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
     std::cout << "FFD_ymax: " << FFD_ymax <<std::endl;
     std::cout << "FFD_ypoints: " << FFD_ypoints <<std::endl;
 
-     // Slice spacing based on FFD lattice distribution 
-     su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
-
-    int M = 0;
+    // Slice spacing based on FFD lattice distribution 
+    su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
 
     // Loop over all slice locations
     for (int j = 0; j < FFD_ypoints; j++)
@@ -1884,7 +1887,7 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
 
       if (count > 0)
       {
-        std::cout <<"Computing Z-centroid!" << std::endl;
+       // std::cout <<"Computing Z-centroid!" << std::endl;
         avg_z = 0.5 * (max_z + min_z);
       }
       if (max_index != -1)
@@ -1907,7 +1910,7 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
     }
 
      // Define the tangent normal array on heap 
-     su2double** tangent_normal_array = new su2double*[M];
+     tangent_normal_array = new su2double*[M];
 
      for (int i = 0; i < M; ++i)
      {
@@ -1959,13 +1962,63 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
       tangent_normal_array[i][2] = tangent[0];    // Tx
       tangent_normal_array[i][3] = tangent[1];    // Ty
       tangent_normal_array[i][4] = tangent[2];    // Tz
-      tangent_normal_array[i][5] = normal[0];     // Ny
-      tangent_normal_array[i][6] = normal[1];         
+      tangent_normal_array[i][5] = normal[0];     // Nx
+      tangent_normal_array[i][6] = normal[1];      // Ny
 
+      outfile << std::fixed << std::setprecision(6)
+      << Xc[i] << "," << Yc[i] << "," << Zc[i] << ","
+      << tangent[0] << "," << tangent[1] << "," << tangent[2] << ","
+      << normal[0] << "," << normal[1] << "\n";
 
-     }
+    } // End master calculations
 
-   }
+  }// End master calculations
+
+  // roadcast M to all ranks
+  SU2_MPI::Bcast(&M, 1, MPI_INT, 0, SU2_MPI::GetComm());
+
+  // Define flat array on all ranks 
+  su2double* flat_array = new su2double[M * 7];
+
+  if (rank == MASTER_NODE)
+  {
+    for (int i = 0 ; i < M; ++i)
+    {
+      for (int j = 0; j < 7; ++j)
+      {
+        flat_array[i * 7 + j] = tangent_normal_array[i][j];
+      }
+    }
+  }
+
+  SU2_MPI::Bcast(flat_array, M * 7, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+
+  if (rank != MASTER_NODE) 
+  {
+    tangent_normal_array = new su2double*[M];
+    for (int i = 0; i < M; ++i) 
+    {
+      tangent_normal_array[i] = new su2double[7];
+      for (int j = 0; j < 7; ++j) 
+      {
+        tangent_normal_array[i][j] = flat_array[i * 7 + j];
+      }
+    }
+  }
+
+  delete[] flat_array;
+
+  if (rank == MASTER_NODE)
+  {
+    delete[] X_global;
+    delete[] Y_global;
+    delete[] Z_global;
+    delete[] recv_counts;
+    delete[] displs;  
+  }
+
+  N_out = M;
+  return tangent_normal_array;
 }
 
 
