@@ -2932,15 +2932,26 @@ bool CSurfaceMovement::SetFFDTaper(CGeometry* geometry, CConfig* config, CFreeFo
         index[0] = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
         index[1] = SU2_TYPE::Int(config->GetParamDV(iDV, 2));
         index[2] = kIndex;
+        
+        
 
-        movement[0] = 0.0;
+
         movement[1] = 0.0;
+        movement[2] = 0.0;
         // Apply the same deformation amplitude across the Y plane (top and bottom control points)
         if (kIndex == 0)
-          movement[2] = Ampl;
+          // THis is the leading edge
+          movement[0] = Ampl;
         else
-          movement[2] = Ampl;
-
+          // This is the trailing edge
+          movement[0] = Ampl;
+        if (rank == MASTER_NODE)
+        {
+          std::cout << " Amplitude:" << Ampl << std::endl;
+          std::cout << " Index[0]: " << index[0] <<std::endl;
+          std::cout << " Index[1]: " << index[1] <<std::endl;
+          std::cout << " Index[2]: " << index[2] <<std::endl;
+        }
         FFDBox->SetControlPoints(index, movement);
       }
 

@@ -2194,6 +2194,7 @@ static const MapType<std::string, ENUM_PARAM> Param_Map = {
   MakePair("FFD_TWIST", FFD_TWIST)
   MakePair("FFD_CAMBER", FFD_CAMBER)
   MakePair("FFD_THICKNESS", FFD_THICKNESS)
+  MakePair("FFD_TAPER", FFD_TAPER)
   MakePair("PARABOLIC", PARABOLIC)
   MakePair("AIRFOIL", AIRFOIL)
   MakePair("SURFACE_FILE", SURFACE_FILE)

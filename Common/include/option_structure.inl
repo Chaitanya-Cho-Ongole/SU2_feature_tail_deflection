@@ -620,6 +620,8 @@ class COptionDVParam : public COptionBase {
           break;
         case FFD_THICKNESS:
           nParamDV[iDV] = 3;
+        case FFD_TAPER:
+          nParamDV[iDV] = 3;
           break;
         case FFD_ANGLE_OF_ATTACK:
           nParamDV[iDV] = 2;
@@ -677,7 +679,7 @@ class COptionDVParam : public COptionBase {
              (this->design_variable[iDV] == FFD_NACELLE) || (this->design_variable[iDV] == FFD_GULL) ||
              (this->design_variable[iDV] == FFD_TWIST) || (this->design_variable[iDV] == FFD_ROTATION) ||
              (this->design_variable[iDV] == FFD_CONTROL_SURFACE) || (this->design_variable[iDV] == FFD_CAMBER) ||
-             (this->design_variable[iDV] == FFD_THICKNESS))) {
+             (this->design_variable[iDV] == FFD_THICKNESS) || (this->design_variable[iDV] == FFD_TAPER))) {
           ss >> this->FFDTag[iDV];
           this->paramDV[iDV][iParamDV] = 0;
         } else

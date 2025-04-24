@@ -2332,7 +2332,8 @@ void CConfig::SetConfig_Options() {
    - FFD_ROTATION ( FFDBox ID, x_Orig, y_Orig, z_Orig, x_End, y_End, z_End )
    - FFD_CONTROL_SURFACE ( FFDBox ID, x_Orig, y_Orig, z_Orig, x_End, y_End, z_End )
    - FFD_CAMBER ( FFDBox ID, i_Ind, j_Ind )
-   - FFD_THICKNESS ( FFDBox ID, i_Ind, j_Ind ) */
+   - FFD_THICKNESS ( FFDBox ID, i_Ind, j_Ind )
+   - FFD_TAPER ( FFDBox ID, i_Ind, j_Ind ) */
   addDVParamOption("DV_PARAM", nDV, ParamDV, FFDTag, Design_Variable);
   /* DESCRIPTION: New value of the shape deformation */
   addDVValueOption("DV_VALUE", nDV_Value, DV_Value, nDV, ParamDV, Design_Variable);
@@ -6519,6 +6520,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
           case FFD_CONTROL_SURFACE:   cout << "FFD (control surface) <-> "; break;
           case FFD_CAMBER:            cout << "FFD (camber) <-> "; break;
           case FFD_THICKNESS:         cout << "FFD (thickness) -> "; break;
+          case FFD_TAPER:             cout << "FFD (taper) -> "; break;
           case FFD_ANGLE_OF_ATTACK:   cout << "FFD (angle of attack) <-> "; break;
         }
 
@@ -6550,7 +6552,8 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
             (Design_Variable[iDV] ==  CST) ||
             (Design_Variable[iDV] ==  SURFACE_BUMP) ||
             (Design_Variable[iDV] ==  FFD_CAMBER) ||
-            (Design_Variable[iDV] ==  FFD_THICKNESS) ) nParamDV = 3;
+            (Design_Variable[iDV] ==  FFD_THICKNESS) ||
+            (Design_Variable[iDV] ==  FFD_TAPER) ) nParamDV = 3;
         if (Design_Variable[iDV] == FFD_CONTROL_POINT_2D) nParamDV = 5;
         if (Design_Variable[iDV] == ROTATION) nParamDV = 6;
         if ((Design_Variable[iDV] ==  FFD_CONTROL_POINT) ||
@@ -6576,7 +6579,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
                (Design_Variable[iDV] == FFD_ROTATION) ||
                (Design_Variable[iDV] == FFD_CONTROL_SURFACE) ||
                (Design_Variable[iDV] == FFD_CAMBER) ||
-               (Design_Variable[iDV] == FFD_THICKNESS))) cout << FFDTag[iDV];
+               (Design_Variable[iDV] == FFD_THICKNESS) || (Design_Variable[iDV] == FFD_TAPER))) cout << FFDTag[iDV];
           else cout << ParamDV[iDV][iParamDV];
 
           if (iParamDV < nParamDV-1) cout << ", ";

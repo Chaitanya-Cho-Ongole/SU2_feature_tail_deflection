@@ -312,7 +312,7 @@ if options.dim == 3:
     print(dvList)
 
     print(" ")
-    print("% FFD_CAMBER, FFD_TWIST, FFD_THICKNESS")
+    print("% FFD_CAMBER, FFD_TWIST, FFD_THICKNESS, FFD_TAPER")
 
     iVariable = 0
     dvList = "DEFINITION_DV= "
@@ -346,6 +346,16 @@ if options.dim == 3:
                 dvList + options.ffd_id + ", " + str(iIndex) + ", " + str(jIndex) + " )"
             )
             dvList = dvList + "; "
+    for jIndex in range(options.jOrder):
+        for iIndex in range(options.iOrder):
+            iVariable = iVariable + 1
+            dvList = (
+                dvList + "( 17, " + str(options.scale) + " | " + options.marker + " | "
+            )
+            dvList = (
+                dvList + options.ffd_id + ", " + str(iIndex) + ", " + str(jIndex) + " )"
+            )
+            dvList = dvList + "; "        
 
     print(dvList)
 
