@@ -2041,8 +2041,201 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
   return tangent_normal_array;
 }
 
+su2double** CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, int& N_out)
+{
+  // Allocate memory for local coordinates
+ su2double* X_local = new su2double[MAX_POINTS];
+ su2double* Y_local = new su2double[MAX_POINTS];
+ su2double* Z_local = new su2double[MAX_POINTS];
 
+ // Number of local points
+ int N_local = 0;
 
+ // Extract surface coordinates from the wing marker across all ranks
+ for (int i = 0; i < config->GetnMarker_All(); i++)
+ {
+    if (config->GetMarker_All_TagBound(i) == "wing") 
+      {
+        unsigned short nDim = geometry->GetnDim();
+          for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++) 
+            {
+              unsigned long iPoint = geometry->vertex[i][iVertex]->GetNode();
+              su2double x = geometry->nodes->GetCoord(iPoint, 0);
+              su2double y = geometry->nodes->GetCoord(iPoint, 1);
+              su2double z = geometry->nodes->GetCoord(iPoint, 2);
+              if (N_local >= MAX_POINTS) break;
+              X_local[N_local] = x;
+              Y_local[N_local] = y;
+              Z_local[N_local] = z;
+              N_local++;
+            }
+      }
+  }
+
+  // Gather the number of points from all ranks to rank 0
+  int* recv_counts = nullptr;
+  int* displs = nullptr;
+
+  if (rank==MASTER_NODE)
+  {
+    recv_counts = new int[size];
+  }
+
+  SU2_MPI::Gather(&N_local, 1, MPI_INT, recv_counts, 1, MPI_INT, 0, SU2_MPI::GetComm());
+
+  // Compute total number of points and displacements on rank 0
+  int total_points = 0;
+
+  if (rank == MASTER_NODE)
+  {
+    displs = new int[size];
+    displs[0] = 0;
+
+    for (int i = 1; i < size; ++i)
+    {
+      displs[i] = displs[i-1] + recv_counts[i-1];
+    }
+    total_points = displs[size - 1] + recv_counts[size - 1];
+  }
+
+  // Allocate global arrays for gathered coordinates on rank 0
+  su2double* X_global = nullptr;
+  su2double* Y_global = nullptr;
+  su2double* Z_global = nullptr;
+
+  if (rank == MASTER_NODE) 
+  {
+    X_global = new su2double[total_points];
+    Y_global = new su2double[total_points];
+    Z_global = new su2double[total_points];
+  }
+
+  // Gather local coordinates to rank 0
+  SU2_MPI::Gatherv(X_local, N_local, MPI_DOUBLE, X_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+  SU2_MPI::Gatherv(Y_local, N_local, MPI_DOUBLE, Y_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+  SU2_MPI::Gatherv(Z_local, N_local, MPI_DOUBLE, Z_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+
+  // Free local coordinate arrays on remote ranks
+  delete[] X_local;
+  delete[] Y_local;
+  delete[] Z_local;
+
+  if (rank == MASTER_NODE)
+  {
+    std::cout << "Total points collected: " << total_points << std::endl;
+  }
+
+  // Allocate pointer array for each FFD plane and its rotation point
+  su2double** chord_array = nullptr;
+  int M = 0;
+
+  if (rank == MASTER_NODE)
+  {
+    // Begin computing local reference line
+    su2double* Xc = new su2double[MAX_POINTS];
+    su2double* Yc = new su2double[MAX_POINTS];
+    su2double* Zc = new su2double[MAX_POINTS];
+
+    // Get the span-wise extent of the FFD bounding box 
+    su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
+    su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the seventh coordinate
+    unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
+
+    std::cout << "FFD_ymin: " << FFD_ymin <<std::endl;
+    std::cout << "FFD_ymax: " << FFD_ymax <<std::endl;
+    std::cout << "FFD_ypoints: " << FFD_ypoints <<std::endl;
+
+    // Slice spacing based on FFD lattice distribution 
+    su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
+
+    chord_array = new su2double*[FFD_ypoints];
+
+    // Loop over all slice locations
+    for (int j = 0; j < FFD_ypoints; j++)
+    {
+      su2double target_y = FFD_ymin + j * dy;
+
+      // Set min x and max x to infinity
+      su2double xmin = -std::numeric_limits<double>::infinity();
+      su2double xmax = std::numeric_limits<double>::infinity();
+
+      for (int  i = 0; i < total_points; ++i)
+      {
+        if (std::abs(Y_global[i] - target_y) < 1e-2)
+        {
+          if (X_global[i] < xmin) xmin = X_global[i];
+          if (X_global[i] > xmax) xmax = X_global[i];
+        }
+      }
+
+      su2double chord = xmax - xmin;
+      su2double x_quarter = xmin + 0.25 * chord;
+      su2double min_dist = std::numeric_limits<double>::infinity();
+      su2double z_qc = 0.0;
+
+      for (int i = 0; i < total_points; ++i)
+      {
+        if (std::abs(Y_global[i] - target_y) < 1e-2)
+        {
+          su2double dist = std::abs(X_global[i] - x_quarter);
+          if (dist < min_dist)
+          {
+            min_dist = dist;
+            z_qc = Z_global[i];
+          }
+        }
+      }
+
+      if (chord > 0.0)
+      {
+        chord_array[M] = new su2double[5];
+        chord_array[M][0] = M;
+        chord_array[M][1] = target_y;
+        chord_array[M][2] = xmin;
+        chord_array[M][3] = xmax;
+        chord_array[M][4] = chord;
+        M++;
+      }
+    }
+  }
+
+  SU2_MPI::Bcast(&M, 1, MPI_INT, 0, SU2_MPI::GetComm());
+  su2double* flat_array = new su2double[M * 5];
+
+  if (rank == MASTER_NODE)
+  {
+    for (int i = 0; i < M; ++i)
+      for (int j = 0; j < 5; ++j)
+        flat_array[i * 5 + j] = chord_array[i][j];
+  }
+
+  SU2_MPI::Bcast(flat_array, M * 5, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+
+  if (rank != MASTER_NODE)
+  {
+    chord_array = new su2double*[M];
+    for (int i = 0; i < M; ++i)
+    {
+      chord_array[i] = new su2double[5];
+      for (int j = 0; j < 5; ++j)
+        chord_array[i][j] = flat_array[i * 5 + j];
+    }
+  }
+  delete[] flat_array;
+
+  if (rank == MASTER_NODE)
+  {
+    delete[] X_global;
+    delete[] Y_global;
+    delete[] Z_global;
+    delete[] recv_counts;
+    delete[] displs;
+  }
+
+  return chord_array;
+
+  // some return place holder
+}
 
 su2double CSurfaceMovement::SetCartesianCoord(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
                                               unsigned short iFFDBox, bool ResetDef) 
@@ -2959,7 +3152,7 @@ return true;
 }
 
 bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
-                                   CFreeFormDefBox** ResetFFDBox, unsigned short iDV, bool ResetDef) const 
+                                   CFreeFormDefBox** ResetFFDBox, unsigned short iDV, bool ResetDef) const
                                    
                                    {
   unsigned short iOrder, jOrder, kOrder;
@@ -3002,6 +3195,23 @@ bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFo
     Segment_P1[0] = config->GetParamDV(iDV, 5);
     Segment_P1[1] = config->GetParamDV(iDV, 6);
     Segment_P1[2] = config->GetParamDV(iDV, 7);
+
+    int N_span_slices;
+    su2double** chord_info = getRotationPoint(geometry, config, FFDBox, iFFDBox, N_span_slices);
+
+    if (rank == MASTER_NODE)
+    {
+      for (int i = 0; i < N_span_slices; ++i) 
+      {
+        std::cout << "Slice " << i
+        << " | Y = " << chord_info[i][1]
+        << " | Xmin = " << chord_info[i][2]
+        << " | Xmax = " << chord_info[i][3]
+        << " | Chord = " << chord_info[i][4]
+        << std::endl;
+      }
+    }
+
 
     iOrder = 0;
     jOrder = SU2_TYPE::Int(config->GetParamDV(iDV, 1));

@@ -286,6 +286,17 @@ class CSurfaceMovement : public CGridMovement {
     int& N_out);
 
     /*!
+   * \brief Compute the rotation point for winglet with local twist
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] FFDBox - Array with all the free forms FFDBoxes of the computation.
+   * \param[in] iFFDBox - Index of FFD box.
+   * \return A 2D array consiting of spanwise FFD index and a rotation point at the local station
+   */
+  su2double** getRotationPoint(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
+    int& N_out);
+
+    /*!
    * \brief Compute the "best fit" plane normal to a wing slice locaton
    * \param[in] x_vals - Array of x-coordinates (chordwise)
    * \param[in] y_vals - Array of y-coordinates (spanwise)
