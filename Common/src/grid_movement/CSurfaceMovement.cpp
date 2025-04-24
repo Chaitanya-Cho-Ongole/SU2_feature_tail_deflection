@@ -2945,13 +2945,7 @@ bool CSurfaceMovement::SetFFDTaper(CGeometry* geometry, CConfig* config, CFreeFo
         else
           // This is the trailing edge
           movement[0] = Ampl;
-        if (rank == MASTER_NODE)
-        {
-          std::cout << " Amplitude:" << Ampl << std::endl;
-          std::cout << " Index[0]: " << index[0] <<std::endl;
-          std::cout << " Index[1]: " << index[1] <<std::endl;
-          std::cout << " Index[2]: " << index[2] <<std::endl;
-        }
+
         FFDBox->SetControlPoints(index, movement);
       }
 
