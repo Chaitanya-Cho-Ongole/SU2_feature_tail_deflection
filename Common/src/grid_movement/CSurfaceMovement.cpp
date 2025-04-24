@@ -33,6 +33,7 @@
 #include <cmath>
 #include <iomanip>
 #include <limits>
+#include <sstream>
 
 
 
@@ -174,7 +175,8 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
       (config->GetDesign_Variable(0) == FFD_NACELLE) || (config->GetDesign_Variable(0) == FFD_GULL) ||
       (config->GetDesign_Variable(0) == FFD_TWIST) || (config->GetDesign_Variable(0) == FFD_ROTATION) ||
       (config->GetDesign_Variable(0) == FFD_CONTROL_SURFACE) || (config->GetDesign_Variable(0) == FFD_CAMBER) ||
-      (config->GetDesign_Variable(0) == FFD_THICKNESS) || (config->GetDesign_Variable(0) == FFD_ANGLE_OF_ATTACK)) 
+      (config->GetDesign_Variable(0) == FFD_THICKNESS) || (config->GetDesign_Variable(0) == FFD_ANGLE_OF_ATTACK) ||
+      (config->GetDesign_Variable(0) == FFD_TAPER))
       
       {
       /*--- Definition of the FFD deformation class ---*/
@@ -307,11 +309,11 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
             
             if (rank == MASTER_NODE)
             {
-              std::cout <<"Computing spanwise normals...";
+              std::cout <<"Skipping computing spanwise normals...";
             }
             // Initialize N_normals to zero. getNormalVector updates it.
-            int N_normals = 0;
-            su2double** normal_array = getNormalVector(geometry, config, FFDBox[iFFDBox], iFFDBox, N_normals);
+            //int N_normals = 0;
+            //su2double** normal_array = getNormalVector(geometry, config, FFDBox[iFFDBox], iFFDBox, N_normals);
       
             /*
             std::cout << std::setw(12)  << "i"
@@ -337,15 +339,15 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
             */
 
             // For now, delete normal_array here
-            for (int i = 0; i < N_normals; ++i)
-            {
-              delete[] normal_array[i];
-            }
-            delete[] normal_array;
+            //for (int i = 0; i < N_normals; ++i)
+            //{
+            //  delete[] normal_array[i];
+           // }
+           // delete[] normal_array;
 
             if (rank == MASTER_NODE)
             {
-              std::cout <<"done!\n";
+              std::cout <<" \n done!\n";
             }
             /*--- Apply the design variables to the control point position ---*/
             ApplyDesignVariables(geometry, config, FFDBox, iFFDBox);
@@ -1687,6 +1689,9 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
       case FFD_ANGLE_OF_ATTACK:
         SetFFDAngleOfAttack(geometry, config, FFDBox[iFFDBox], FFDBox, iDV, false);
         break;
+      case FFD_TAPER:
+        SetFFDTaper(geometry, config, FFDBox[iFFDBox], FFDBox, iDV, false);
+        break;  
     }
   }
 }
@@ -1768,6 +1773,21 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
           }
       }
   }
+
+  // Each process writes local coordinates to surface_coords_<rank>.csv
+  std::ostringstream filename;
+  filename << "surface_coords_" << rank << ".csv";
+  std::ofstream coord_out(filename.str());
+  coord_out << "X,Y,Z\n";
+  for (int i = 0; i < N_local; ++i)
+    {
+      coord_out << std::fixed << std::setprecision(8)
+        << X_local[i] << ","
+        << Y_local[i] << ","
+        << Z_local[i] << "\n";
+    }
+
+    coord_out.close();
 
   // Gather the number of points from all ranks to rank 0
   int* recv_counts = nullptr;
@@ -2860,6 +2880,77 @@ bool CSurfaceMovement::SetFFDThickness(CGeometry* geometry, CConfig* config, CFr
   }
 
   return true;
+}
+
+bool CSurfaceMovement::SetFFDTaper(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,
+  CFreeFormDefBox** ResetFFDBox, unsigned short iDV, bool ResetDef) const 
+  {
+    su2double Ampl, movement[3] = {0.0, 0.0, 0.0};
+    unsigned short index[3], kIndex, iPlane, iFFDBox;
+    string design_FFDBox;
+    su2double Scale = config->GetOpt_RelaxFactor();
+
+    /*--- Set control points to its original value (even if the design variable is not in this box) ---*/
+
+    if (ResetDef) 
+    {
+      for (iFFDBox = 0; iFFDBox < nFFDBox; iFFDBox++) ResetFFDBox[iFFDBox]->SetOriginalControlPoints();
+    }
+
+    design_FFDBox = config->GetFFDTag(iDV);
+
+    if (design_FFDBox.compare(FFDBox->GetTag()) == 0) 
+    {
+      /*--- Check that it is possible to move the control point ---*/
+
+      for (kIndex = 0; kIndex < 2; kIndex++) 
+      {
+        index[0] = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
+        index[1] = SU2_TYPE::Int(config->GetParamDV(iDV, 2));
+        index[2] = kIndex;
+
+        for (iPlane = 0; iPlane < FFDBox->Get_nFix_IPlane(); iPlane++) 
+        {
+          if (index[0] == FFDBox->Get_Fix_IPlane(iPlane)) return false;
+        }
+
+        for (iPlane = 0; iPlane < FFDBox->Get_nFix_JPlane(); iPlane++) 
+        {
+          if (index[1] == FFDBox->Get_Fix_JPlane(iPlane)) return false;
+        }
+
+        for (iPlane = 0; iPlane < FFDBox->Get_nFix_KPlane(); iPlane++) 
+        {
+          if (index[2] == FFDBox->Get_Fix_KPlane(iPlane)) return false;
+        }
+      }
+
+      for (kIndex = 0; kIndex < 2; kIndex++) 
+      {
+        Ampl = config->GetDV_Value(iDV) * Scale;
+
+        index[0] = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
+        index[1] = SU2_TYPE::Int(config->GetParamDV(iDV, 2));
+        index[2] = kIndex;
+
+        movement[0] = 0.0;
+        movement[1] = 0.0;
+        // Apply the same deformation amplitude across the Y plane (top and bottom control points)
+        if (kIndex == 0)
+          movement[2] = Ampl;
+        else
+          movement[2] = Ampl;
+
+        FFDBox->SetControlPoints(index, movement);
+      }
+
+    } 
+    else 
+    {
+      return false;
+}
+
+return true;
 }
 
 bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,

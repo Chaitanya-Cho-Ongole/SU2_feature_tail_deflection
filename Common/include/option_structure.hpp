@@ -2149,6 +2149,7 @@ enum ENUM_PARAM {
   FFD_CAMBER = 14,            /*!< \brief Free form deformation for 3D design (camber change). */
   FFD_TWIST = 15,             /*!< \brief Free form deformation for 3D design (change the twist angle of a section). */
   FFD_THICKNESS = 16,         /*!< \brief Free form deformation for 3D design (thickness change). */
+  FFD_TAPER = 17,         /*!< \brief Free form deformation for 3D design (taper change). */
   FFD_ROTATION = 18,          /*!< \brief Free form deformation for 3D design (rotation around a line). */
   FFD_CONTROL_POINT_2D = 19,  /*!< \brief Free form deformation for 2D design (change a control point). */
   FFD_CAMBER_2D = 20,         /*!< \brief Free form deformation for 3D design (camber change). */

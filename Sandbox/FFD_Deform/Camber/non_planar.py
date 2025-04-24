@@ -47,7 +47,10 @@ def plot_3d_surface_with_slices(surface_df, y_slices):
     
     
     plt.tight_layout()
-    plt.show()
+    # High resolution settings
+    plt.rcParams['figure.dpi'] = 300
+    plt.rcParams['savefig.dpi'] = 300
+    plt.savefig('Plots/non_planar_FFD.png')
     
 def plot_xy_projection_with_slices(surface_df, y_slices):
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -141,12 +144,163 @@ def plot_yz_projection_with_vectors(max_z_points):
         plt.tight_layout()
         plt.show()
 
+def plot_surface_coords_by_rank(file_paths, zoom_percentile=0.0):
+    """
+    Reads surface coordinate CSV files from multiple MPI ranks, plots a 3D scatter plot
+    with each rank in a different color, and zooms into the central region of the point cloud.
+
+    Parameters:
+    - file_paths: List of strings, paths to the CSV files (one per MPI rank)
+    - dpi: Resolution of the plot
+    - zoom_percentile: Percentile to trim on each end (e.g., 0.25 zooms to 25th–75th percentile)
+    """
+
+    plt.style.use('seaborn-v0_8-deep')
+    
+    
+    # Load all CSV files
+    dfs = [pd.read_csv(file) for file in file_paths]
+    combined_df = pd.concat(dfs, ignore_index=True)
+
+    # Define distinct colors and labels
+    colors = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7']
+    labels = [f'Process {i}' for i in range(len(file_paths))]
+
+    # Compute zoom region
+    lower = zoom_percentile
+    upper = 1 - zoom_percentile
+    xlim = (combined_df['X'].quantile(lower), combined_df['X'].quantile(upper))
+    ylim = (combined_df['Y'].quantile(lower), combined_df['Y'].quantile(upper))
+    zlim = (combined_df['Z'].quantile(lower), combined_df['Z'].quantile(upper))
+
+
+    # Create figure and axis
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plot each rank with different color
+    for i, df in enumerate(dfs):
+        ax.scatter(df['X'], df['Y'], df['Z'], s=8, alpha=0.6, color=colors[i % len(colors)], label=labels[i])
+
+    # Apply zoom
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_zlim(zlim)
+
+    # Turn off axis and background
+    ax.set_axis_off()
+    ax.grid(False)
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+    ax.xaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
+    ax.yaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
+    ax.zaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
+    
+    F = plt.gcf()
+    Size = F.get_size_inches()
+    F.set_size_inches(Size[0] * 1.5, Size[1] * 1.5, forward=True)
+    
+    # High resolution settings
+    plt.rcParams['figure.dpi'] = 300
+    plt.rcParams['savefig.dpi'] = 300
+   
+
+    plt.legend(frameon=False, loc='upper left', prop={'size': 16, 'family': 'Times New Roman'}, ncol=3)
+    plt.tight_layout()
+    plt.savefig('Plots/non_planar_surf_decomp.png')
+    #plt.show()
+
+
+def plot_surface_with_vectors(tangent_normal_csv, file_paths):
+    """
+    Plots Y-Z projection of surface coordinates with overlaid tangent and normal vectors.
+
+    Parameters:
+    - tangent_normal_file: Path to the CSV containing tangent and normal vectors.
+    - surface_coords_pattern: Glob pattern to match MPI process coordinate files.
+    - figsize: Size of the figure (width, height).
+    - dpi: Resolution of the plot.
+    - scatter_color: Color of surface points.
+    - scatter_alpha: Transparency of surface points.
+    - scatter_size: Size of scatter markers.
+    - tangent_color: Color of tangent vectors.
+    - normal_color: Color of normal vectors.
+    - vector_width: Width of the quiver arrows.
+    """
+    
+    plt.style.use('seaborn-v0_8-deep')
+     
+    # Load tangent and normal data
+    df_vec = pd.read_csv(tangent_normal_csv)
+    
+    print(df_vec.head())
+    
+    # Load all CSV files
+    dfs = [pd.read_csv(file) for file in file_paths]
+    combined_df = pd.concat(dfs, ignore_index=True)
+    
+    
+    colors = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7']
+    
+    labels = [f'Process {i}' for i in range(len(file_paths))]
+
+    
+    
+    # Create figure and axis
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    
+    # Plot each rank with different color
+    for i, df in enumerate(dfs):
+        ax.scatter(df['Y'], df['Z'], s=1, alpha=0.2, color=colors[i % len(colors)], label=labels[i])
+        
+    # Overlay tangent vectors
+    ax.quiver(df_vec["Y"], df_vec["Z"], df_vec["Tangent_Y"], df_vec["Tangent_Z"],
+              angles='xy', scale_units='xy', scale=1, color="red", width=0.004)
+
+    # Overlay normal vectors
+    ax.quiver(df_vec["Y"], df_vec["Z"], df_vec["Normal_Y"], df_vec["Normal_Z"],
+              angles='xy', scale_units='xy', scale=1, color="black", width=0.004)
+
+
+    # Final touches
+    ax.axis("equal")
+    ax.axis('off')
+    
+    F = plt.gcf()
+    Size = F.get_size_inches()
+    F.set_size_inches(Size[0] * 1.5, Size[1] * 1.5, forward=True)
+    
+    # High resolution settings
+    plt.rcParams['figure.dpi'] = 300
+    plt.rcParams['savefig.dpi'] = 300
+    
+    plt.tight_layout()
+    plt.show()
+    
+    
 def main():
     surface_path = "surface_coordinates.csv"
     slice_path = "slice_locations.csv"
+    
+    file_paths = [
+    "data/surface_coords_1.csv",
+    "data/surface_coords_3.csv",
+    "data/surface_coords_4.csv",
+    "data/surface_coords_5.csv",
+    "data/surface_coords_7.csv"
+    ]  
+    
+    tangent_normal_csv = "data/tangent_normals_output.csv"
+    
+    #plot_surface_coords_by_rank(file_paths)
+    
+    #surface_df = pd.read_csv("surface_coordinates.csv")
+    #plot_surface_with_vectors(tangent_normal_csv, file_paths)
 
     surface_df, y_slices = load_data(surface_path, slice_path)
-    max_z_points = extract_max_z(surface_df, y_slices)
+    #max_z_points = extract_max_z(surface_df, y_slices)
 
     plot_3d_surface_with_slices(surface_df, y_slices)
     #plot_yz_projection_with_vectors(max_z_points)
