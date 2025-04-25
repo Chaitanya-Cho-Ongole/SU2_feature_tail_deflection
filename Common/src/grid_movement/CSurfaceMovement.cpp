@@ -1708,7 +1708,9 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
         {
           std::cout <<"Computing local rotation point for each FFD slice location" << std::endl;
         }
-        su2double** chord = getRotationPoint(geometry, config, FFDBox[iFFDBox], iFFDBox, N_out);
+        getRotationPoint(geometry, config, FFDBox[iFFDBox], iFFDBox, N_out);
+
+        // NOTE: N_out is less than the total number of FFD planes since bounding planes are disregarded.
 
         if (rank == MASTER_NODE)
         {
@@ -1716,23 +1718,20 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
           std::cout <<"Number of slices:" << N_out << std::endl;
           for (int i = 0; i < N_out; ++i)
           {
-            std::cout << "Slice index:" << chord[i][0]
-                      << ", Y = " << chord[i][1]
-                      << ", Xmin = " << chord[i][2]
-                      << ", Xmax = " << chord[i][3]
-                      << ", Chord Length = " << chord[i][4]
+            std::cout << "Slice index:" << chord_array_[i][0]
+                      << ", Y = " << chord_array_[i][1]
+                      << ", Xmin = " << chord_array_[i][2]
+                      << ", Xmax = " << chord_array_[i][3]
+                      << ", Chord Length = " << chord_array_[i][4]
+                      << ", Quarter chord = " << chord_array_[i][5]
+                      << ", Z location = " << chord_array_[i][6]
                       << std::endl;
           }
         }
         // Set twist deformaton across span
         SetFFDTwist(geometry, config, FFDBox[iFFDBox], FFDBox, iDV, false);
 
-        // Geometry twist complete. Now delete slice array
-        for (int i = 0; i < N_out; ++i)
-        {
-          delete[] chord[i];
-        }
-        delete[] chord;
+      
         if (rank == MASTER_NODE)
         {
           std::cout <<"Done computing local twist deformations" <<std::endl;
@@ -2190,10 +2189,7 @@ su2double** CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* con
     std::cout << "Total points collected: " << total_points << std::endl;
   }
 
-  // Allocate pointer array for each FFD plane and its rotation point
-  su2double** chord_array = nullptr;
-  int M = 0;
-
+  
   if (rank == MASTER_NODE)
   {
     // Begin computing local reference line
@@ -2209,11 +2205,14 @@ su2double** CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* con
     std::cout << "FFD_ymin: " << FFD_ymin <<std::endl;
     std::cout << "FFD_ymax: " << FFD_ymax <<std::endl;
     std::cout << "FFD_ypoints: " << FFD_ypoints <<std::endl;
+    // We have FFD y degree + 1 FFD Span locations (including the bouding planes)
+    std::cout << "FFD Span degree: " << config->GetDegreeFFDBox(iFFDBox, 1) << std::endl;
 
     // Slice spacing based on FFD lattice distribution 
     su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
 
-    chord_array = new su2double*[FFD_ypoints];
+    chord_array_.clear();
+    chord_array_.reserve(FFD_ypoints);
 
     // Loop over all slice locations
     for (int j = 0; j < FFD_ypoints; j++)
@@ -2224,7 +2223,7 @@ su2double** CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* con
       su2double xmin = -std::numeric_limits<double>::infinity();
       su2double xmax = std::numeric_limits<double>::infinity();
 
-      const int MAX_SLICE_POINTS = 10000; // assuming not more than 10000 points per slice
+      const int MAX_SLICE_POINTS = 100000; // assuming not more than 100,000 points per slice
       su2double X_slice[MAX_SLICE_POINTS];
       int slice_count = 0;
 
@@ -2272,41 +2271,32 @@ su2double** CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* con
 
         if (chord > 0.0)
         {
-          chord_array[M] = new su2double[5];
-          chord_array[M][0] = M;
-          chord_array[M][1] = target_y;
-          chord_array[M][2] = xmin;
-          chord_array[M][3] = xmax;
-          chord_array[M][4] = chord;
-          M++;
+          chord_array_.push_back({static_cast<su2double>(chord_array_.size()+1), target_y, xmin, xmax, chord, x_quarter, z_qc});
         }
       }
     }
   }
 
+  int M = chord_array_.size();
   SU2_MPI::Bcast(&M, 1, MPI_INT, 0, SU2_MPI::GetComm());
-  su2double* flat_array = new su2double[M * 5];
+  std::vector<su2double> flat_array(M * 7);
 
   if (rank == MASTER_NODE)
   {
     for (int i = 0; i < M; ++i)
-      for (int j = 0; j < 5; ++j)
-        flat_array[i * 5 + j] = chord_array[i][j];
+      for (int j = 0; j < 7; ++j)
+        flat_array[i * 7 + j] = chord_array_[i][j];
   }
 
-  SU2_MPI::Bcast(flat_array, M * 5, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+  SU2_MPI::Bcast(flat_array.data(), flat_array.size(), MPI_DOUBLE, 0, SU2_MPI::GetComm());
 
   if (rank != MASTER_NODE)
   {
-    chord_array = new su2double*[M];
+    chord_array_.resize(M);
     for (int i = 0; i < M; ++i)
-    {
-      chord_array[i] = new su2double[5];
-      for (int j = 0; j < 5; ++j)
-        chord_array[i][j] = flat_array[i * 5 + j];
-    }
+      for (int j = 0; j < 7; ++j)
+        chord_array_[i][j] = flat_array[i * 7 + j];
   }
-  delete[] flat_array;
 
   if (rank == MASTER_NODE)
   {
@@ -2318,8 +2308,6 @@ su2double** CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* con
   }
   // Set N_out (number of slices) to M
   N_out = M;
-  return chord_array;
-
   // some return place holder
 }
 

@@ -48,6 +48,9 @@ class CSurfaceMovement : public CGridMovement {
   vector<su2double> GlobalCoordZ[MAX_NUMBER_FFD];
   vector<string> GlobalTag[MAX_NUMBER_FFD];
   vector<unsigned long> GlobalPoint[MAX_NUMBER_FFD];
+  vector<std::array<su2double, 7 >> chord_array_;
+    
+    
 
   /*!
    * \brief Constructor of the class.
@@ -419,6 +422,7 @@ class CSurfaceMovement : public CGridMovement {
   /*!
    * \brief Set a twist angle deformation of the Free From box using the control point position.
    * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] chord - An array with spanwise local reference line definition
    * \param[in] config - Definition of the particular problem.
    * \param[in] FFDBox - Array with all the free forms FFDBoxes of the computation.
    * \param[in] iDV - Index of the design variable.
