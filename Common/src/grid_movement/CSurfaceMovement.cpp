@@ -176,12 +176,6 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
   } // End FFD setting
 
   /*--- Free Form deformation based ---*/
-
-  if (rank == MASTER_NODE)
-  {
-    std::cout << "WILL DEFORM SURFACE MESH NOW" <<std::endl;
-  }
-
   if ((config->GetDesign_Variable(0) == FFD_CONTROL_POINT_2D) || (config->GetDesign_Variable(0) == FFD_CAMBER_2D) ||
       (config->GetDesign_Variable(0) == FFD_THICKNESS_2D) || (config->GetDesign_Variable(0) == FFD_CONTROL_POINT) ||
       (config->GetDesign_Variable(0) == FFD_NACELLE) || (config->GetDesign_Variable(0) == FFD_GULL) ||
@@ -191,88 +185,102 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
       (config->GetDesign_Variable(0) == FFD_TAPER))
       
       {
-      /*--- Definition of the FFD deformation class ---*/
+       /*--- Definition of the FFD deformation class ---*/
 
-      FFDBox = new CFreeFormDefBox*[MAX_NUMBER_FFD];
+        FFDBox = new CFreeFormDefBox*[MAX_NUMBER_FFD];
 
-      /*--- Read the FFD information from the grid file ---*/
+        /*--- Read the FFD information from the grid file ---*/
 
-      ReadFFDInfo(geometry, config, FFDBox, config->GetMesh_FileName());
+        ReadFFDInfo(geometry, config, FFDBox, config->GetMesh_FileName());
 
-      /*--- If there is a FFDBox in the input file ---*/
+        /*--- If there is a FFDBox in the input file ---*/
 
-      if (nFFDBox != 0) 
-      {
-        /*--- If the FFDBox was not defined in the input file ---*/
-
-        if (!GetFFDBoxDefinition()) 
+        if (nFFDBox != 0) 
         {
-          SU2_MPI::Error(
-            string("There is not FFD box definition in the mesh file,\n") + string("run DV_KIND=FFD_SETTING first !!"),
-            CURRENT_FUNCTION);
-        }
+          /*--- If the FFDBox was not defined in the input file ---*/
 
-        /* --- Check if the FFD boxes referenced in the design variable definition can be found --- */
-
-        for (iDV = 0; iDV < config->GetnDV(); iDV++) 
-        {
-          if (!CheckFFDBoxDefinition(config, iDV)) 
+          if (!GetFFDBoxDefinition()) 
           {
-            SU2_MPI::Error(string("There is no FFD box with tag \"") + config->GetFFDTag(iDV) +
+            SU2_MPI::Error(
+              string("There is not FFD box definition in the mesh file,\n") + string("run DV_KIND=FFD_SETTING first !!"),
+              CURRENT_FUNCTION);
+          }
+
+          /* --- Check if the FFD boxes referenced in the design variable definition can be found --- */
+
+          for (iDV = 0; iDV < config->GetnDV(); iDV++) 
+          {
+            if (!CheckFFDBoxDefinition(config, iDV)) 
+            {
+              SU2_MPI::Error(string("There is no FFD box with tag \"") + config->GetFFDTag(iDV) +
                              string("\" defined in the mesh file.\n") +
                              string("Check the definition of the design variables and/or the FFD settings !!"),
                          CURRENT_FUNCTION);
+            }
           }
-        }
 
-      /*--- Check that the user has specified a non-zero number of surfaces to move with DV_MARKER. ---*/
+          /*--- Check that the user has specified a non-zero number of surfaces to move with DV_MARKER. ---*/
 
-      if (config->GetnMarker_DV() == 0) 
-      {
-        SU2_MPI::Error(string("No markers are specified in DV_MARKER, so no deformation will occur.\n") +
+          if (config->GetnMarker_DV() == 0) 
+          {
+            SU2_MPI::Error(string("No markers are specified in DV_MARKER, so no deformation will occur.\n") +
                            string("List markers to be deformed in DV_MARKER."),
                        CURRENT_FUNCTION);
-      }
+          }
 
-      /*--- Output original FFD FFDBox ---*/
+          /*--- Output original FFD FFDBox ---*/
 
-      if ((rank == MASTER_NODE) && (config->GetKind_SU2() != SU2_COMPONENT::SU2_DOT)) 
-      {
-        for (unsigned short iFile = 0; iFile < config->GetnVolumeOutputFiles(); iFile++) {
-          auto FileFormat = config->GetVolumeOutputFiles();
+          if ((rank == MASTER_NODE) && (config->GetKind_SU2() != SU2_COMPONENT::SU2_DOT)) 
+          {
+            for (unsigned short iFile = 0; iFile < config->GetnVolumeOutputFiles(); iFile++) 
+            {
+              auto FileFormat = config->GetVolumeOutputFiles();
 
-          if (isParaview(FileFormat[iFile])) {
-            cout << "Writing a Paraview file of the FFD boxes." << endl;
-            for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) {
-              FFDBox[iFFDBox]->SetParaview(geometry, iFFDBox, true);
-            }
-          } else if (isTecplot(FileFormat[iFile])) {
-            cout << "Writing a Tecplot file of the FFD boxes." << endl;
-            for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) {
-              FFDBox[iFFDBox]->SetTecplot(geometry, iFFDBox, true);
-            }
-          } else if (FileFormat[iFile] == OUTPUT_TYPE::CGNS) {
-            cout << "Writing a CGNS file of the FFD boxes." << endl;
-            for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) {
-              FFDBox[iFFDBox]->SetCGNS(geometry, iFFDBox, true);
+              if (isParaview(FileFormat[iFile])) 
+              {
+                cout << "Writing a Paraview file of the FFD boxes." << endl;
+                for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) 
+                {
+                  FFDBox[iFFDBox]->SetParaview(geometry, iFFDBox, true);
+                }
+              } 
+              else if (isTecplot(FileFormat[iFile])) 
+              {
+                cout << "Writing a Tecplot file of the FFD boxes." << endl;
+                for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) 
+                {
+                  FFDBox[iFFDBox]->SetTecplot(geometry, iFFDBox, true);
+                }
+              } 
+              else if (FileFormat[iFile] == OUTPUT_TYPE::CGNS) 
+              {
+                cout << "Writing a CGNS file of the FFD boxes." << endl;
+                for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) 
+                {
+                  FFDBox[iFFDBox]->SetCGNS(geometry, iFFDBox, true);
+                }
+              }
             }
           }
-        }
-      }
 
-      /*--- If polar FFD, change the coordinates system ---*/
+          /*--- If polar FFD, change the coordinates system ---*/
 
-      if (cylindrical) {
-        for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) {
-          FFDBox[iFFDBox]->SetCart2Cyl_CornerPoints(config);
-          FFDBox[iFFDBox]->SetCart2Cyl_ControlPoints(config);
-        }
-      } else if (spherical || polar) {
-        for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) {
-          FFDBox[iFFDBox]->SetCart2Sphe_CornerPoints(config);
-          FFDBox[iFFDBox]->SetCart2Sphe_ControlPoints(config);
-        }
-      }
+          if (cylindrical) 
+          {
+            for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) 
+            {
+              FFDBox[iFFDBox]->SetCart2Cyl_CornerPoints(config);
+              FFDBox[iFFDBox]->SetCart2Cyl_ControlPoints(config);
+            }
+          } 
+          else if (spherical || polar) 
+          {
+            for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) 
+            {
+              FFDBox[iFFDBox]->SetCart2Sphe_CornerPoints(config);
+              FFDBox[iFFDBox]->SetCart2Sphe_ControlPoints(config);
+            }
+          }
 
       /*--- Apply the deformation to the orifinal FFD box ---*/
 
@@ -323,6 +331,16 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
             {
               std::cout <<"Skipping computing spanwise normals...";
             }
+
+            if (rank == MASTER_NODE)
+            {
+              std::cout <<"Computing reference point at FFD slice locations";
+            }
+
+            // Call method to compute reference points at each FFD slice location
+            // Nah, I am calling getRotationPoint() when in case of FFD twist. 
+
+
             // Initialize N_normals to zero. getNormalVector updates it.
             //int N_normals = 0;
             //su2double** normal_array = getNormalVector(geometry, config, FFDBox[iFFDBox], iFFDBox, N_normals);
@@ -1684,8 +1702,43 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
         SetFFDGull(geometry, config, FFDBox[iFFDBox], FFDBox, iDV, false);
         break;
       case FFD_TWIST:
+      {
+        int N_out = 0;
+        if (rank == MASTER_NODE)
+        {
+          std::cout <<"Computing local rotation point for each FFD slice location" << std::endl;
+        }
+        su2double** chord = getRotationPoint(geometry, config, FFDBox[iFFDBox], iFFDBox, N_out);
+
+        if (rank == MASTER_NODE)
+        {
+          std::cout <<"About to print chord arary" <<std::endl;
+          std::cout <<"Number of slices:" << N_out << std::endl;
+          for (int i = 0; i < N_out; ++i)
+          {
+            std::cout << "Slice index:" << chord[i][0]
+                      << ", Y = " << chord[i][1]
+                      << ", Xmin = " << chord[i][2]
+                      << ", Xmax = " << chord[i][3]
+                      << ", Chord Length = " << chord[i][4]
+                      << std::endl;
+          }
+        }
+        // Set twist deformaton across span
         SetFFDTwist(geometry, config, FFDBox[iFFDBox], FFDBox, iDV, false);
+
+        // Geometry twist complete. Now delete slice array
+        for (int i = 0; i < N_out; ++i)
+        {
+          delete[] chord[i];
+        }
+        delete[] chord;
+        if (rank == MASTER_NODE)
+        {
+          std::cout <<"Done computing local twist deformations" <<std::endl;
+        }
         break;
+      }
       case FFD_ROTATION:
         SetFFDRotation(geometry, config, FFDBox[iFFDBox], FFDBox, iDV, false);
         break;
@@ -2171,42 +2224,62 @@ su2double** CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* con
       su2double xmin = -std::numeric_limits<double>::infinity();
       su2double xmax = std::numeric_limits<double>::infinity();
 
-      for (int  i = 0; i < total_points; ++i)
-      {
-        if (std::abs(Y_global[i] - target_y) < 1e-2)
-        {
-          if (X_global[i] < xmin) xmin = X_global[i];
-          if (X_global[i] > xmax) xmax = X_global[i];
-        }
-      }
-
-      su2double chord = xmax - xmin;
-      su2double x_quarter = xmin + 0.25 * chord;
-      su2double min_dist = std::numeric_limits<double>::infinity();
-      su2double z_qc = 0.0;
+      const int MAX_SLICE_POINTS = 10000; // assuming not more than 10000 points per slice
+      su2double X_slice[MAX_SLICE_POINTS];
+      int slice_count = 0;
 
       for (int i = 0; i < total_points; ++i)
       {
         if (std::abs(Y_global[i] - target_y) < 1e-2)
         {
-          su2double dist = std::abs(X_global[i] - x_quarter);
-          if (dist < min_dist)
+          if (slice_count < MAX_SLICE_POINTS)
           {
-            min_dist = dist;
-            z_qc = Z_global[i];
+            X_slice[slice_count] = X_global[i];
+            slice_count++;
           }
         }
       }
 
-      if (chord > 0.0)
+      if (slice_count > 0)
       {
-        chord_array[M] = new su2double[5];
-        chord_array[M][0] = M;
-        chord_array[M][1] = target_y;
-        chord_array[M][2] = xmin;
-        chord_array[M][3] = xmax;
-        chord_array[M][4] = chord;
-        M++;
+        su2double xmin = X_slice[0];
+        su2double xmax = X_slice[0];
+
+
+        for (int k = 1; k < slice_count; ++k)
+        {
+          if (X_slice[k] < xmin) xmin = X_slice[k];
+          if (X_slice[k] > xmax) xmax = X_slice[k];
+        }
+
+        su2double chord = xmax - xmin;
+        su2double x_quarter = xmin + 0.25 * chord;
+        su2double min_dist = std::numeric_limits<double>::infinity();
+        su2double z_qc = 0.0;
+
+        for (int i = 0; i < total_points; ++i)
+        {
+          if (std::abs(Y_global[i] - target_y) < 1e-2)
+          {
+            su2double dist = std::abs(X_global[i] - x_quarter);
+            if (dist < min_dist)
+            {
+              min_dist = dist;
+              z_qc = Z_global[i];
+            }
+          }
+        }
+
+        if (chord > 0.0)
+        {
+          chord_array[M] = new su2double[5];
+          chord_array[M][0] = M;
+          chord_array[M][1] = target_y;
+          chord_array[M][2] = xmin;
+          chord_array[M][3] = xmax;
+          chord_array[M][4] = chord;
+          M++;
+        }
       }
     }
   }
@@ -2243,7 +2316,8 @@ su2double** CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* con
     delete[] recv_counts;
     delete[] displs;
   }
-
+  // Set N_out (number of slices) to M
+  N_out = M;
   return chord_array;
 
   // some return place holder
