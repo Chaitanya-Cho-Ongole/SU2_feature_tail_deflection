@@ -58,6 +58,11 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
   string FFDBoxTag;
   bool allmoving;
 
+  if (rank == MASTER_NODE)
+  {
+    std::cout <<"Setting surface Deformation"<<std::endl; 
+  }
+
   const bool cylindrical = (config->GetFFD_CoordSystem() == CYLINDRICAL);
   const bool spherical = (config->GetFFD_CoordSystem() == SPHERICAL);
   const bool polar = (config->GetFFD_CoordSystem() == POLAR);
@@ -68,7 +73,8 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
 
   /*--- Setting the Free Form Deformation ---*/
 
-  if (config->GetDesign_Variable(0) == FFD_SETTING) {
+  if (config->GetDesign_Variable(0) == FFD_SETTING) 
+  {
     /*--- Definition of the FFD deformation class ---*/
 
     FFDBox = new CFreeFormDefBox*[MAX_NUMBER_FFD];
@@ -163,12 +169,18 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
       }
     }
 
-    else {
+    else 
+    {
       SU2_MPI::Error("There are no FFD boxes in the mesh file!!", CURRENT_FUNCTION);
     }
-  }
+  } // End FFD setting
 
   /*--- Free Form deformation based ---*/
+
+  if (rank == MASTER_NODE)
+  {
+    std::cout << "WILL DEFORM SURFACE MESH NOW" <<std::endl;
+  }
 
   if ((config->GetDesign_Variable(0) == FFD_CONTROL_POINT_2D) || (config->GetDesign_Variable(0) == FFD_CAMBER_2D) ||
       (config->GetDesign_Variable(0) == FFD_THICKNESS_2D) || (config->GetDesign_Variable(0) == FFD_CONTROL_POINT) ||
@@ -3195,23 +3207,6 @@ bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFo
     Segment_P1[0] = config->GetParamDV(iDV, 5);
     Segment_P1[1] = config->GetParamDV(iDV, 6);
     Segment_P1[2] = config->GetParamDV(iDV, 7);
-
-    int N_span_slices;
-    su2double** chord_info = getRotationPoint(geometry, config, FFDBox, iFFDBox, N_span_slices);
-
-    if (rank == MASTER_NODE)
-    {
-      for (int i = 0; i < N_span_slices; ++i) 
-      {
-        std::cout << "Slice " << i
-        << " | Y = " << chord_info[i][1]
-        << " | Xmin = " << chord_info[i][2]
-        << " | Xmax = " << chord_info[i][3]
-        << " | Chord = " << chord_info[i][4]
-        << std::endl;
-      }
-    }
-
 
     iOrder = 0;
     jOrder = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
