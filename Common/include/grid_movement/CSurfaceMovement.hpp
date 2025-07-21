@@ -49,6 +49,7 @@ class CSurfaceMovement : public CGridMovement {
   vector<string> GlobalTag[MAX_NUMBER_FFD];
   vector<unsigned long> GlobalPoint[MAX_NUMBER_FFD];
   vector<std::array<su2double, 7 >> chord_array_;
+  int Num_slice;
     
     
 

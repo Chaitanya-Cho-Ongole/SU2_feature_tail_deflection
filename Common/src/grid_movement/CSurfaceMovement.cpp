@@ -1703,31 +1703,14 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
         break;
       case FFD_TWIST:
       {
-        int N_out = 0;
+  
         if (rank == MASTER_NODE)
         {
           std::cout <<"Computing local rotation point for each FFD slice location" << std::endl;
         }
-        getRotationPoint(geometry, config, FFDBox[iFFDBox], iFFDBox, N_out);
+        getRotationPoint(geometry, config, FFDBox[iFFDBox], iFFDBox, Num_slice);
 
-        // NOTE: N_out is less than the total number of FFD planes since bounding planes are disregarded.
 
-        if (rank == MASTER_NODE)
-        {
-          std::cout <<"About to print chord arary" <<std::endl;
-          std::cout <<"Number of slices:" << N_out << std::endl;
-          for (int i = 0; i < N_out; ++i)
-          {
-            std::cout << "Slice index:" << chord_array_[i][0]
-                      << ", Y = " << chord_array_[i][1]
-                      << ", Xmin = " << chord_array_[i][2]
-                      << ", Xmax = " << chord_array_[i][3]
-                      << ", Chord Length = " << chord_array_[i][4]
-                      << ", Quarter chord = " << chord_array_[i][5]
-                      << ", Z location = " << chord_array_[i][6]
-                      << std::endl;
-          }
-        }
         // Set twist deformaton across span
         SetFFDTwist(geometry, config, FFDBox[iFFDBox], FFDBox, iDV, false);
 
@@ -3236,6 +3219,11 @@ bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFo
   string design_FFDBox;
   su2double Scale = config->GetOpt_RelaxFactor();
 
+  if (rank == MASTER_NODE)
+  {
+    std::cout << "Current iDV: " << iDV << std::endl;
+  }
+
   /*--- Set control points to its original value (even if the
    design variable is not in this box) ---*/
 
@@ -3247,6 +3235,25 @@ bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFo
 
   design_FFDBox = config->GetFFDTag(iDV);
 
+  // NOTE: N_out is less than the total number of FFD planes since bounding planes are disregarded.
+
+  if (rank == MASTER_NODE)
+  {
+    std::cout <<"About to print chord arary " <<std::endl;
+    std::cout <<"Number of slices: " << Num_slice << std::endl;
+    for (int i = 0; i < Num_slice; ++i)
+    {
+          std::cout << "Slice index:" << chord_array_[i][0]
+                        << ", Y = " << chord_array_[i][1]
+                        << ", Xmin = " << chord_array_[i][2]
+                        << ", Xmax = " << chord_array_[i][3]
+                        << ", Chord Length = " << chord_array_[i][4]
+                        << ", Quarter chord = " << chord_array_[i][5]
+                        << ", Z location = " << chord_array_[i][6]
+                        << std::endl;
+    }
+  }
+
   /*--- Check if the design variable applies to this FFD box---*/
   if (design_FFDBox.compare(FFDBox->GetTag()) == 0) 
   {
@@ -3257,6 +3264,8 @@ bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFo
     {
       if (jOrder == FFDBox->Get_Fix_JPlane(iPlane)) return false;
     }
+
+  
 
     /*--- Line plane intersection to find the origin of rotation ---*/
 
