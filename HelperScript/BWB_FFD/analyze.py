@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
 import numpy as np
 import pyvista as pv
+import subprocess
 
 # -----------------------------
 # Inputs
 # -----------------------------
 VTU_FILE = "surface_deformed.vtu"
 
-# Global intent (your original choice)
-DEG_Y = 15                 # 15 spanwise boxes
-DEG_Z = 1                  # per-box z degree (=> 3 ctrl pts in z)
+# Spanwise segmentation (15 boxes => 16 stations)
+DEG_Y = 15
 N_BOXES = DEG_Y
-NY_STATIONS = N_BOXES + 1  # 16 stations => 15 spanwise boxes
+NY_STATIONS = N_BOXES + 1
+
+# Vertical degree (SU2 convention: nk = DEG_Z + 1 control points)
+DEG_Z = 2
 
 # Option 2: variable deg_x per spanwise box
-MIN_DEG_X = 4
+MIN_DEG_X = 3
 MAX_DEG_X = 8
 
 # Choose how deg_x is selected:
 #   - "max_chord": target_dx = max_chord / (MAX_DEG_X+1)
 #   - "absolute":  target_dx = TARGET_DX_ABS (in your mesh units)
 TARGET_DX_MODE = "max_chord"
-TARGET_DX_ABS = None  # e.g., 0.05 if mode == "absolute"
+TARGET_DX_ABS = None  # e.g. 0.05 if TARGET_DX_MODE == "absolute"
 
 # Padding relative to local chord and local z-thickness
 PAD_LE = 0.03   # fraction of local chord ahead of LE
@@ -38,6 +41,13 @@ ZLO_PCTL = 1.0
 ZHI_PCTL = 99.0
 
 BOX_PREFIX = "WING"
+
+# -----------------------------
+# set_ffd_design_var.py (ONE call per box)
+# -----------------------------
+RUN_SET_FFD = False  # True => actually run; False => dry-run print
+SET_FFD_SCRIPT = "set_ffd_design_var.py"
+MARKERS = "wing, fuselage, tail, empanage"
 
 # Visualization toggles
 SHOW_MESH_EDGES = False
@@ -77,11 +87,6 @@ def spanwise_profiles(points, y_stations, half_window):
 
 
 def choose_deg_x_per_box(chord_box, min_deg=3, max_deg=8, mode="max_chord", target_dx_abs=None):
-    """
-    Choose deg_x for each spanwise box to avoid overly dense x-control points outboard.
-
-    chord_box: array length N_BOXES (representative chord per box)
-    """
     if mode == "absolute":
         if target_dx_abs is None or target_dx_abs <= 0:
             raise ValueError("TARGET_DX_ABS must be set (>0) when TARGET_DX_MODE='absolute'")
@@ -91,7 +96,6 @@ def choose_deg_x_per_box(chord_box, min_deg=3, max_deg=8, mode="max_chord", targ
     else:
         raise ValueError("TARGET_DX_MODE must be 'max_chord' or 'absolute'")
 
-    # number of control points ~ chord / target_dx, clamp to [min_deg+1, max_deg+1]
     nctrl = np.clip(np.round(chord_box / target_dx).astype(int), min_deg + 1, max_deg + 1)
     deg_x = (nctrl - 1).astype(int)
     return deg_x
@@ -120,7 +124,6 @@ def su2_hexa_corners(xmin0, xmax0, y0, zmin0, zmax0,
 
 
 def hexa_wireframe(corners):
-    """Wireframe polyline for a hexahedron defined by 8 corners in SU2 order."""
     p1, p2, p3, p4, p5, p6, p7, p8 = corners
     edges = [
         (p1, p2), (p2, p3), (p3, p4), (p4, p1),
@@ -140,7 +143,6 @@ def hexa_wireframe(corners):
 
 
 def trilinear_ctrl_points(corners, deg_x, deg_y, deg_z):
-    """Trilinear control points implied by corners and degrees."""
     p1, p2, p3, p4, p5, p6, p7, p8 = corners
     nx, ny, nz = deg_x + 1, deg_y + 1, deg_z + 1
 
@@ -163,6 +165,21 @@ def trilinear_ctrl_points(corners, deg_x, deg_y, deg_z):
                     (1-x)*y*z*p8
                 )
     return ctrl
+
+
+def run_set_ffd_for_box(box_name, ni, nj, nk, run=False):
+    cmd = [
+        SET_FFD_SCRIPT,
+        "-i", str(ni),
+        "-j", str(nj),
+        "-k", str(nk),
+        "-b", box_name,
+        "-m", MARKERS,
+    ]
+    if run:
+        subprocess.run(cmd, check=True)
+    else:
+        print(" ".join(cmd))
 
 
 def main():
@@ -211,7 +228,7 @@ def main():
         all_boxes_corners.append(corners)
 
     # -----------------------------
-    # PRINT SU2 SNIPPET (stdout)
+    # PRINT SU2 blocks (grouped by deg_x)
     # -----------------------------
     print("\n# --------------------------------------------")
     print("# SU2 FFD: tapered spanwise boxes from VTU")
@@ -224,7 +241,6 @@ def main():
     for j in range(N_BOXES):
         print(f"#  {j:02d} : {deg_x_box[j]}   (c~{chord_box[j]:.6e})")
 
-    # Group by degree so each group can have a single FFD_DEGREE line
     unique_degs = sorted(set(deg_x_box.tolist()))
     print("\n# --------------------------------------------")
     print("# SU2 blocks grouped by deg_x (copy/paste into cfg)")
@@ -232,7 +248,6 @@ def main():
 
     for degx in unique_degs:
         idxs = [j for j in range(N_BOXES) if deg_x_box[j] == degx]
-
         print(f"FFD_DEGREE = ({degx}, 1, {DEG_Z})")
         print("FFD_DEFINITION = \\")
         defs = []
@@ -247,10 +262,24 @@ def main():
         print("  " + ";\n  ".join(defs))
         print("")
 
-    print("# Diagnostics (root/mid/tip stations):")
-    for idx in [0, NY_STATIONS // 2, NY_STATIONS - 1]:
-        print(f"#  y={y_st[idx]: .6e}, xLE~{xLE[idx]: .6e}, chord~{chord[idx]: .6e}, "
-              f"zmin~{zmin[idx]: .6e}, zmax~{zmax[idx]: .6e}")
+    # -----------------------------
+    # set_ffd_design_var.py calls (ONE call per box)
+    # -----------------------------
+    print("\n# --------------------------------------------")
+    print("# set_ffd_design_var.py calls (ONE per box)")
+    print("# --------------------------------------------\n")
+
+    for box_j in range(N_BOXES):
+        degx = int(deg_x_box[box_j])
+        degy = 1
+        degz = int(DEG_Z)
+
+        ni = degx + 1
+        nj = degy + 1   # = 2
+        nk = degz + 1
+
+        box_name = f"{BOX_PREFIX}_DX{degx}_{box_j:03d}"
+        run_set_ffd_for_box(box_name, ni, nj, nk, run=RUN_SET_FFD)
 
     # -----------------------------
     # DRAW (PyVista)
