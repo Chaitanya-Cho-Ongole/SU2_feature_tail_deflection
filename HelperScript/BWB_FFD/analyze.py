@@ -7,10 +7,21 @@ import pyvista as pv
 # -----------------------------
 VTU_FILE = "surface_deformed.vtu"
 
-# Requested global degrees across the wing
-DEG_X, DEG_Y, DEG_Z = 8, 15, 2
+# Global intent (your original choice)
+DEG_Y = 15                 # 15 spanwise boxes
+DEG_Z = 1                  # per-box z degree (=> 3 ctrl pts in z)
 N_BOXES = DEG_Y
 NY_STATIONS = N_BOXES + 1  # 16 stations => 15 spanwise boxes
+
+# Option 2: variable deg_x per spanwise box
+MIN_DEG_X = 4
+MAX_DEG_X = 8
+
+# Choose how deg_x is selected:
+#   - "max_chord": target_dx = max_chord / (MAX_DEG_X+1)
+#   - "absolute":  target_dx = TARGET_DX_ABS (in your mesh units)
+TARGET_DX_MODE = "max_chord"
+TARGET_DX_ABS = None  # e.g., 0.05 if mode == "absolute"
 
 # Padding relative to local chord and local z-thickness
 PAD_LE = 0.03   # fraction of local chord ahead of LE
@@ -21,10 +32,10 @@ PAD_Z  = 0.15   # fraction of local z-thickness above/below
 WINDOW_FRAC = 1.5
 
 # Robust percentiles (avoid stray outliers)
-LE_PCTL   = 1.0
-TE_PCTL   = 99.0
-ZLO_PCTL  = 1.0
-ZHI_PCTL  = 99.0
+LE_PCTL  = 1.0
+TE_PCTL  = 99.0
+ZLO_PCTL = 1.0
+ZHI_PCTL = 99.0
 
 BOX_PREFIX = "WING"
 
@@ -32,7 +43,8 @@ BOX_PREFIX = "WING"
 SHOW_MESH_EDGES = False
 MESH_OPACITY = 0.60
 DRAW_BOXES = True
-DRAW_BOX_POINTS = False
+DRAW_CTRL_POINTS = True
+CTRL_POINT_SIZE = 10
 
 
 def spanwise_profiles(points, y_stations, half_window):
@@ -64,6 +76,27 @@ def spanwise_profiles(points, y_stations, half_window):
     return xLE, xTE, zlo, zhi
 
 
+def choose_deg_x_per_box(chord_box, min_deg=3, max_deg=8, mode="max_chord", target_dx_abs=None):
+    """
+    Choose deg_x for each spanwise box to avoid overly dense x-control points outboard.
+
+    chord_box: array length N_BOXES (representative chord per box)
+    """
+    if mode == "absolute":
+        if target_dx_abs is None or target_dx_abs <= 0:
+            raise ValueError("TARGET_DX_ABS must be set (>0) when TARGET_DX_MODE='absolute'")
+        target_dx = float(target_dx_abs)
+    elif mode == "max_chord":
+        target_dx = chord_box.max() / (max_deg + 1)
+    else:
+        raise ValueError("TARGET_DX_MODE must be 'max_chord' or 'absolute'")
+
+    # number of control points ~ chord / target_dx, clamp to [min_deg+1, max_deg+1]
+    nctrl = np.clip(np.round(chord_box / target_dx).astype(int), min_deg + 1, max_deg + 1)
+    deg_x = (nctrl - 1).astype(int)
+    return deg_x
+
+
 def fmt_pt(p):
     return f"{p[0]:.10e}, {p[1]:.10e}, {p[2]:.10e}"
 
@@ -87,18 +120,13 @@ def su2_hexa_corners(xmin0, xmax0, y0, zmin0, zmax0,
 
 
 def hexa_wireframe(corners):
-    """
-    Build a wireframe (polyline) representation of a hexahedron from 8 corners.
-    Corners are assumed to be [p1..p8] in the order above.
-    """
+    """Wireframe polyline for a hexahedron defined by 8 corners in SU2 order."""
     p1, p2, p3, p4, p5, p6, p7, p8 = corners
     edges = [
-        (p1, p2), (p2, p3), (p3, p4), (p4, p1),  # bottom
-        (p5, p6), (p6, p7), (p7, p8), (p8, p5),  # top
-        (p1, p5), (p2, p6), (p3, p7), (p4, p8),  # verticals
+        (p1, p2), (p2, p3), (p3, p4), (p4, p1),
+        (p5, p6), (p6, p7), (p7, p8), (p8, p5),
+        (p1, p5), (p2, p6), (p3, p7), (p4, p8),
     ]
-
-    # Create one PolyData with multiple line segments
     pts = []
     lines = []
     idx = 0
@@ -106,29 +134,21 @@ def hexa_wireframe(corners):
         pts.append(a); pts.append(b)
         lines.extend([2, idx, idx + 1])
         idx += 2
-
     poly = pv.PolyData(np.array(pts))
     poly.lines = np.array(lines)
     return poly
 
 
 def trilinear_ctrl_points(corners, deg_x, deg_y, deg_z):
-    """
-    Generate control points inside an SU2 hexahedral FFD box
-    using trilinear interpolation of the 8 corners.
-
-    corners: list of 8 points [p1..p8] in SU2 order
-    returns array of shape (nx, ny, nz, 3)
-    """
+    """Trilinear control points implied by corners and degrees."""
     p1, p2, p3, p4, p5, p6, p7, p8 = corners
-
     nx, ny, nz = deg_x + 1, deg_y + 1, deg_z + 1
+
     xi = np.linspace(0.0, 1.0, nx)
     eta = np.linspace(0.0, 1.0, ny)
     zeta = np.linspace(0.0, 1.0, nz)
 
     ctrl = np.zeros((nx, ny, nz, 3))
-
     for i, x in enumerate(xi):
         for j, y in enumerate(eta):
             for k, z in enumerate(zeta):
@@ -143,8 +163,6 @@ def trilinear_ctrl_points(corners, deg_x, deg_y, deg_z):
                     (1-x)*y*z*p8
                 )
     return ctrl
-
-
 
 
 def main():
@@ -170,41 +188,66 @@ def main():
     zmin = zlo - PAD_Z * zth
     zmax = zhi + PAD_Z * zth
 
+    # Representative chord per BOX (avg of end stations)
+    chord_box = 0.5 * (chord[:-1] + chord[1:])  # length N_BOXES
+
+    # Variable deg_x per box
+    deg_x_box = choose_deg_x_per_box(
+        chord_box,
+        min_deg=MIN_DEG_X,
+        max_deg=MAX_DEG_X,
+        mode=TARGET_DX_MODE,
+        target_dx_abs=TARGET_DX_ABS
+    )
+
+    # Build corners for each box
+    all_boxes_corners = []
+    for j in range(N_BOXES):
+        y0, y1 = y_st[j], y_st[j + 1]
+        corners = su2_hexa_corners(
+            xmin[j], xmax[j], y0, zmin[j], zmax[j],
+            xmin[j + 1], xmax[j + 1], y1, zmin[j + 1], zmax[j + 1]
+        )
+        all_boxes_corners.append(corners)
+
     # -----------------------------
     # PRINT SU2 SNIPPET (stdout)
     # -----------------------------
     print("\n# --------------------------------------------")
     print("# SU2 FFD: tapered spanwise boxes from VTU")
     print("# Axes: chord=X, span=Y, dihedral/thickness=Z")
-    print("# Requested global degrees: (8, 15, 2)")
-    print("# Implemented as 15 boxes with per-box degree: (8, 1, 2)")
+    print(f"# Spanwise boxes: {N_BOXES} (stations={NY_STATIONS})")
+    print(f"# Per-box degrees: (deg_x[j], 1, {DEG_Z})  with deg_x varying by chord")
     print("# --------------------------------------------\n")
 
-    print(f"FFD_DEGREE = ({DEG_X}, 1, {DEG_Z})\n")
-
-    defs = []
-    all_boxes_corners = []
-
+    print("# deg_x per box (j : deg_x, chord_box):")
     for j in range(N_BOXES):
-        y0, y1 = y_st[j], y_st[j + 1]
+        print(f"#  {j:02d} : {deg_x_box[j]}   (c~{chord_box[j]:.6e})")
 
-        corners = su2_hexa_corners(
-            xmin[j], xmax[j], y0, zmin[j], zmax[j],
-            xmin[j+1], xmax[j+1], y1, zmin[j+1], zmax[j+1]
-        )
-        all_boxes_corners.append(corners)
+    # Group by degree so each group can have a single FFD_DEGREE line
+    unique_degs = sorted(set(deg_x_box.tolist()))
+    print("\n# --------------------------------------------")
+    print("# SU2 blocks grouped by deg_x (copy/paste into cfg)")
+    print("# --------------------------------------------\n")
 
-        name = f"{BOX_PREFIX}_{j:03d}"
-        line = (
-            f"({name}, "
-            f"{fmt_pt(corners[0])}, {fmt_pt(corners[1])}, {fmt_pt(corners[2])}, {fmt_pt(corners[3])}, "
-            f"{fmt_pt(corners[4])}, {fmt_pt(corners[5])}, {fmt_pt(corners[6])}, {fmt_pt(corners[7])})"
-        )
-        defs.append(line)
+    for degx in unique_degs:
+        idxs = [j for j in range(N_BOXES) if deg_x_box[j] == degx]
 
-    print("FFD_DEFINITION = \\")
-    print("  " + ";\n  ".join(defs))
-    print("\n# Diagnostics (root/mid/tip):")
+        print(f"FFD_DEGREE = ({degx}, 1, {DEG_Z})")
+        print("FFD_DEFINITION = \\")
+        defs = []
+        for j in idxs:
+            corners = all_boxes_corners[j]
+            name = f"{BOX_PREFIX}_DX{degx}_{j:03d}"
+            defs.append(
+                f"({name}, "
+                f"{fmt_pt(corners[0])}, {fmt_pt(corners[1])}, {fmt_pt(corners[2])}, {fmt_pt(corners[3])}, "
+                f"{fmt_pt(corners[4])}, {fmt_pt(corners[5])}, {fmt_pt(corners[6])}, {fmt_pt(corners[7])})"
+            )
+        print("  " + ";\n  ".join(defs))
+        print("")
+
+    print("# Diagnostics (root/mid/tip stations):")
     for idx in [0, NY_STATIONS // 2, NY_STATIONS - 1]:
         print(f"#  y={y_st[idx]: .6e}, xLE~{xLE[idx]: .6e}, chord~{chord[idx]: .6e}, "
               f"zmin~{zmin[idx]: .6e}, zmax~{zmax[idx]: .6e}")
@@ -218,29 +261,26 @@ def main():
     all_ctrl_pts = []
 
     if DRAW_BOXES:
-        for corners in all_boxes_corners:
-            # Draw FFD box
+        for j, corners in enumerate(all_boxes_corners):
             wf = hexa_wireframe(corners)
             pl.add_mesh(wf, color="black", line_width=2)
 
-            # Generate & collect control points
-            ctrl = trilinear_ctrl_points(corners, DEG_X, 1, DEG_Z)
-            all_ctrl_pts.append(ctrl.reshape(-1, 3))
+            if DRAW_CTRL_POINTS:
+                ctrl = trilinear_ctrl_points(corners, int(deg_x_box[j]), 1, DEG_Z)
+                all_ctrl_pts.append(ctrl.reshape(-1, 3))
 
-    # Plot control points
-    if len(all_ctrl_pts) > 0:
+    if DRAW_CTRL_POINTS and len(all_ctrl_pts) > 0:
         ctrl_pts = np.vstack(all_ctrl_pts)
         pl.add_points(
             ctrl_pts,
             render_points_as_spheres=True,
-            point_size=10,
+            point_size=CTRL_POINT_SIZE,
             color="red",
         )
 
     pl.add_axes()
     pl.show_grid()
     pl.show()
-
 
 
 if __name__ == "__main__":
