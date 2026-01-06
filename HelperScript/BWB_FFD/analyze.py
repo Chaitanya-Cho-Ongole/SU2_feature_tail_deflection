@@ -14,7 +14,7 @@ N_BOXES = DEG_Y
 NY_STATIONS = N_BOXES + 1
 
 # Vertical degree (SU2 convention: nk = DEG_Z + 1 control points)
-DEG_Z = 2
+DEG_Z = 1
 
 # Option 2: variable deg_x per spanwise box
 MIN_DEG_X = 3
@@ -47,7 +47,7 @@ BOX_PREFIX = "WING"
 # -----------------------------
 RUN_SET_FFD = False  # True => actually run; False => dry-run print
 SET_FFD_SCRIPT = "set_ffd_design_var.py"
-MARKERS = "wing, fuselage, tail, empanage"
+MARKERS = "'wing_top, wing_bottom, tip_top, tip_bottom, TE, tip_TE'"
 
 # Visualization toggles
 SHOW_MESH_EDGES = False
@@ -241,26 +241,33 @@ def main():
     for j in range(N_BOXES):
         print(f"#  {j:02d} : {deg_x_box[j]}   (c~{chord_box[j]:.6e})")
 
-    unique_degs = sorted(set(deg_x_box.tolist()))
+    # -----------------------------
+    # PRINT SU2 FFD blocks (SEQUENTIAL, one box at a time)
+    # -----------------------------
     print("\n# --------------------------------------------")
-    print("# SU2 blocks grouped by deg_x (copy/paste into cfg)")
+    print("# SU2 FFD boxes (sequential, per-box degree)")
     print("# --------------------------------------------\n")
 
-    for degx in unique_degs:
-        idxs = [j for j in range(N_BOXES) if deg_x_box[j] == degx]
-        print(f"FFD_DEGREE = ({degx}, 1, {DEG_Z})")
+    for j in range(N_BOXES):
+        degx = int(deg_x_box[j])
+        degy = 1
+        degz = int(DEG_Z)
+
+        box_name = f"{BOX_PREFIX}_{j:03d}"
+        corners = all_boxes_corners[j]
+
+        print(f"# Box {j:02d}: {box_name}")
+        print(f"FFD_DEGREE = ({degx}, {degy}, {degz})")
         print("FFD_DEFINITION = \\")
-        defs = []
-        for j in idxs:
-            corners = all_boxes_corners[j]
-            name = f"{BOX_PREFIX}_DX{degx}_{j:03d}"
-            defs.append(
-                f"({name}, "
-                f"{fmt_pt(corners[0])}, {fmt_pt(corners[1])}, {fmt_pt(corners[2])}, {fmt_pt(corners[3])}, "
-                f"{fmt_pt(corners[4])}, {fmt_pt(corners[5])}, {fmt_pt(corners[6])}, {fmt_pt(corners[7])})"
-            )
-        print("  " + ";\n  ".join(defs))
-        print("")
+        print(
+            "  "
+            f"({box_name}, "
+            f"{fmt_pt(corners[0])}, {fmt_pt(corners[1])}, "
+            f"{fmt_pt(corners[2])}, {fmt_pt(corners[3])}, "
+            f"{fmt_pt(corners[4])}, {fmt_pt(corners[5])}, "
+            f"{fmt_pt(corners[6])}, {fmt_pt(corners[7])})\n"
+        )
+
 
     # -----------------------------
     # set_ffd_design_var.py calls (ONE call per box)
@@ -274,11 +281,11 @@ def main():
         degy = 1
         degz = int(DEG_Z)
 
-        ni = degx + 1
-        nj = degy + 1   # = 2
-        nk = degz + 1
+        ni = degx
+        nj = degy
+        nk = degz
 
-        box_name = f"{BOX_PREFIX}_DX{degx}_{box_j:03d}"
+        box_name = f"{BOX_PREFIX}_{box_j:03d}"
         run_set_ffd_for_box(box_name, ni, nj, nk, run=RUN_SET_FFD)
 
     # -----------------------------

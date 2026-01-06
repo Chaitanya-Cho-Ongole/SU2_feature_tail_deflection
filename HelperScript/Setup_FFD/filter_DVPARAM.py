@@ -90,6 +90,17 @@ def remove_range_by_i_for_j(entries, j_target, i_min, i_max):
         if not (e.j == j_target and i_min <= e.i <= i_max)
     ]
 
+def dv_entries_to_su2_string(entries):
+    """
+    Convert a list of DVEntry objects into a single SU2-style
+    DEFINITION_DV= (...) ; (...) ; ... string.
+    """
+    parts = []
+    for e in entries:
+        parts.append(
+            f"( {e.marker}, {e.i}, {e.j}, {e.k}, {e.dx:.1f}, {e.dy:.1f}, {e.dz:.1f} )"
+        )
+    return "DEFINITION_DV= " + " ; ".join(parts)
 
 
 def main():
@@ -110,7 +121,6 @@ def main():
 
     # Remove entries for j = 1
     dv_entries = remove_range_by_i_for_j(dv_entries, j_target=1, i_min=0, i_max=1)
-
 
     # Remove entries for j = 2
     dv_entries = remove_range_by_i_for_j(dv_entries, j_target=2, i_min=0, i_max=3)
@@ -157,14 +167,75 @@ def main():
     # Remove entries for j = 16
     dv_entries = remove_range_by_i_for_j(dv_entries, j_target=16, i_min=0, i_max=11)
 
+    # Remove control points from the TE region
+
+
+    # Remove entries for j = 0
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=0, i_min=20, i_max=20)
+
+    # Remove entries for j = 1
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=1, i_min=20, i_max=20)
+
+    # Remove entries for j = 2
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=2, i_min=20, i_max=20)
+
+    # Remove entries for j = 3
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=3, i_min=18, i_max=20)
+
+    # Remove entries for j = 4
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=4, i_min=18, i_max=20)
+
+    # Remove entries for j = 5
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=5, i_min=16, i_max=20)
+
+    # Remove entries for j = 6
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=6, i_min=15, i_max=20)
+
+    # Remove entries for j = 7
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=7, i_min=14, i_max=20)
+
+    # Remove entries for j = 8
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=8, i_min=14, i_max=20)
+
+    # Remove entries for j = 9
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=9, i_min=14, i_max=20)
+
+    # Remove entries for j = 10
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=10, i_min=14, i_max=20)
+
+    # Remove entries for j = 11
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=11, i_min=14, i_max=20)
+
+    # Remove entries for j = 12
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=12, i_min=14, i_max=20)
+
+    # Remove entries for j = 13
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=13, i_min=15, i_max=20)
+
+    # Remove entries for j = 14
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=14, i_min=16, i_max=20)
+
+    # Remove entries for j = 15
+    dv_entries = remove_range_by_i_for_j(dv_entries, j_target=14, i_min=17, i_max=20)
+
+
     print(f"{len(dv_entries)} DV entries after removal.")
 
 
 
     print(f"Parsed {len(dv_entries)} DV entries.")
+
+    su2_output = dv_entries_to_su2_string(dv_entries)
+
+    # Print rewritten DEFINITION_DV line
+    print("\n================ REWRITTEN DEFINITION_DV ================\n")
+    print(su2_output)
+    print("\n=========================================================\n")
+
+
     # Print a few as a sanity check
-    for e in dv_entries[:10]:
-        print(e)
+    #for e in dv_entries[:30]:
+    #    print(e)
 
     # If you want to do something more structured, e.g. build a dict:
     # dv_dict = {(e.i, e.j, e.k): e for e in dv_entries}
