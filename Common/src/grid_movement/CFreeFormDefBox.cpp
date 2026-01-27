@@ -34,7 +34,11 @@ CFreeFormDefBox::CFreeFormDefBox() : CGridMovement() {}
 
 CFreeFormDefBox::CFreeFormDefBox(const unsigned short Degree[], unsigned short BSplineOrder[],
                                  unsigned short kind_blending)
-    : CGridMovement() {
+    : CGridMovement() 
+    {
+
+
+      // NOTE: Default-constructs an FFD box object via base CGridMovement
   unsigned short iCornerPoints, iOrder, jOrder, kOrder, iDim;
 
   /*--- FFD is always 3D (even in 2D problems) ---*/
@@ -108,7 +112,9 @@ CFreeFormDefBox::CFreeFormDefBox(const unsigned short Degree[], unsigned short B
   }
 }
 
-CFreeFormDefBox::~CFreeFormDefBox() {
+CFreeFormDefBox::~CFreeFormDefBox() 
+{
+  // NOTE: Allocates/initializes the 3D FFD box data structures (corner/contro points,scratch arrays and selects Bezier or uniform B-spline blending)
   unsigned short iOrder, jOrder, kOrder, iCornerPoints, iDim;
 
   for (iOrder = 0; iOrder < lOrder; iOrder++) {
@@ -192,6 +198,7 @@ void CFreeFormDefBox::SetUnitCornerPoints() {
   delete[] coord;
 }
 
+// NOTE: LEGACY SU2-NATIVE FFD box definition
 void CFreeFormDefBox::SetControlPoints_Parallelepiped() {
   unsigned short iDim, iDegree, jDegree, kDegree;
 
@@ -222,6 +229,72 @@ void CFreeFormDefBox::SetControlPoints_Parallelepiped() {
             su2double(kDegree) / su2double(nDegree) * (Coord_Corner_Points[4][2] - Coord_Corner_Points[0][2]);
       }
 }
+
+
+void CFreeFormDefBox::ReadControlPointsFromCSV()
+{
+  const std::string filename = "lattice.csv";
+
+  std::ifstream file(filename);
+  if (!file.is_open()) {
+    throw std::runtime_error("Could not open FFD CSV file: " + filename);
+  }
+
+  std::string line;
+
+  // skip header
+  std::getline(file, line);
+
+  unsigned short i, j, k;
+  su2double x, y, z;
+
+  unsigned long count = 0;
+  const unsigned long expected = (unsigned long)lOrder * mOrder * nOrder;
+
+  while (std::getline(file, line)) {
+    std::stringstream ss(line);
+    char comma;
+
+    if (!(ss >> i >> comma >> j >> comma >> k >> comma
+              >> x >> comma >> y >> comma >> z)) {
+      throw std::runtime_error("Malformed line in FFD CSV: " + line);
+    }
+
+    // Bounds checks
+    if (i >= lOrder || j >= mOrder || k >= nOrder) {
+      throw std::runtime_error(
+        "FFD CSV index out of bounds: (i,j,k)=(" +
+        std::to_string(i) + "," +
+        std::to_string(j) + "," +
+        std::to_string(k) + ")"
+      );
+    }
+
+    // Assign
+    Coord_Control_Points[i][j][k][0] = x;
+    Coord_Control_Points[i][j][k][1] = y;
+    Coord_Control_Points[i][j][k][2] = z;
+
+    // Keep original copy consistent
+    Coord_Control_Points_Copy[i][j][k][0] = x;
+    Coord_Control_Points_Copy[i][j][k][1] = y;
+    Coord_Control_Points_Copy[i][j][k][2] = z;
+
+    ++count;
+  }
+
+  // Sanity check
+  if (count != expected) {
+    throw std::runtime_error(
+      "FFD CSV point count mismatch: read " +
+      std::to_string(count) + ", expected " +
+      std::to_string(expected)
+    );
+  }
+}
+
+
+
 
 void CFreeFormDefBox::SetSupportCP(CFreeFormDefBox* FFDBox) {
   unsigned short iDim, iOrder, jOrder, kOrder;

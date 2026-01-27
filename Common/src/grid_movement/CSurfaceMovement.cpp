@@ -116,9 +116,17 @@ vector<vector<su2double> > CSurfaceMovement::SetSurface_Deformation(CGeometry* g
       CFreeFormDefBox FFDBox_unitary(Degree_Unitary, BSpline_Unitary, BEZIER);
       FFDBox_unitary.SetUnitCornerPoints();
 
-      /*--- Compute the control points of the unitary box, in this case the degree is 1 and the order is 2 ---*/
+      /* Check fro custom FFD lattice definition and read from csv */
+      //if (FFD_Tailored && cartesian)
+      //{
+      //  FFDBox_unitary.ReadControlPointsFromCSV();
+     // }
 
+      /* If no lattice csv found, set uniformly distributed lattice point */
+      /*--- Compute the control points of the unitary box, in this case the degree is 1 and the order is 2 ---*/
+   
       FFDBox_unitary.SetControlPoints_Parallelepiped();
+      
 
       for (iFFDBox = 0; iFFDBox < GetnFFDBox(); iFFDBox++) {
         /*--- Compute the support control points for the final FFD using the unitary box ---*/
@@ -1154,6 +1162,7 @@ void CSurfaceMovement::CheckFFDIntersections(CGeometry* geometry, CConfig* confi
 
   SU2_COMPONENT Kind_SU2 = config->GetKind_SU2();
   bool FFD_Symmetry_Plane = config->GetFFD_Symmetry_Plane();
+  bool FFD_Tailored = config->GetFFD_Tailored();
   bool cylindrical = (config->GetFFD_CoordSystem() == CYLINDRICAL);
   bool spherical = (config->GetFFD_CoordSystem() == SPHERICAL);
   bool polar = (config->GetFFD_CoordSystem() == POLAR);
@@ -1701,20 +1710,39 @@ void CSurfaceMovement::ApplyDesignVariables(CGeometry* geometry, CConfig* config
       case FFD_GULL:
         SetFFDGull(geometry, config, FFDBox[iFFDBox], FFDBox, iDV, false);
         break;
+
       case FFD_TWIST:
       {
-  
+        // NEED an adaptive twist deformation 
+        /* Break this down into three steps:
+          
+          
+          STEP 3: Apply twist about the ROTATION POINT and along the local TANGENT VECTOR
+        */
         if (rank == MASTER_NODE)
         {
-          std::cout <<"Computing local rotation point for each FFD slice location" << std::endl;
+          std::cout << "Computing local rotation point for each FFD-j index" << std::endl;
         }
+
+        //STEP 1: Compute the rotation point along FFD slice location
         getRotationPoint(geometry, config, FFDBox[iFFDBox], iFFDBox, Num_slice);
 
+        if (rank == MASTER_NODE)
+        {
+          std::cout << "Computing local normal and tangent vectors for each FFD-j index" <<std::endl;
+        }
 
-        // Set twist deformaton across span
+        //STEP 2: Compute the local TANGENT and VECTOR
+        int N_tangent = 0;
+        su2double** tn_array = getNormalVector(geometry, config, FFDBox[iFFDBox], iFFDBox, N_tangent);
+
+        // Store so SetFFDTwist() can use them
+        tangent_normal_array_ = tn_array;
+        N_tangent_ = N_tangent;
+
+        // STEP 3: apply twist using local rotation point + local tangent vector
         SetFFDTwist(geometry, config, FFDBox[iFFDBox], FFDBox, iDV, false);
 
-      
         if (rank == MASTER_NODE)
         {
           std::cout <<"Done computing local twist deformations" <<std::endl;
@@ -1981,7 +2009,7 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
 
      for (int i = 0; i < M; ++i)
      {
-      double tangent[3], normal[2];
+      su2double tangent[3], normal[2];
       tangent_normal_array[i] = new su2double[7]; // [FFD degree, slice_loc, Tx, Ty, Tz, Ny Nz]
 
       if (i ==0 && M>=2)
@@ -2003,16 +2031,16 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
         tangent[2] = Zc[i+1] - Zc[i-1];
       }
 
-      double len  = std::sqrt(tangent[0]*tangent[0] + tangent[1]*tangent[1]+ tangent[2]*tangent[2]);
+      su2double len  = std::sqrt(tangent[0]*tangent[0] + tangent[1]*tangent[1]+ tangent[2]*tangent[2]);
 
       tangent[0] /=len;
       tangent[1] /=len;
       tangent[2] /=len;
 
-      double ty = tangent[1];
-      double tz = tangent[2];
+      su2double ty = tangent[1];
+      su2double tz = tangent[2];
 
-      double mag = std::sqrt(ty * ty + tz * tz);
+      su2double mag = std::sqrt(ty * ty + tz * tz);
 
       normal[0] = -tz / mag;
       normal[1] =  ty / mag;
@@ -3213,209 +3241,243 @@ bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFo
                                    
                                    {
   unsigned short iOrder, jOrder, kOrder;
-  su2double x, y, z, movement[3], Segment_P0[3], Segment_P1[3], Plane_P0[3], Plane_Normal[3], Variable_P0, Variable_P1,
-      Intersection[3], Variable_Interp;
+  su2double x, y, z, movement[3];
+  
   unsigned short index[3], iPlane, iFFDBox;
   string design_FFDBox;
   su2double Scale = config->GetOpt_RelaxFactor();
 
-  if (rank == MASTER_NODE)
+ 
+  if (rank == MASTER_NODE) 
   {
-    std::cout << "Current iDV: " << iDV << std::endl;
+    std::cout << "Current iDV (twist): " << iDV << std::endl;
   }
 
-  /*--- Set control points to its original value (even if the
-   design variable is not in this box) ---*/
-
+  /*--- Reset all FFD boxes to their original control points if requested ---*/
   if (ResetDef) 
   {
-    /*--- All FFD boxes are reset to their original control points---*/
-    for (iFFDBox = 0; iFFDBox < nFFDBox; iFFDBox++) ResetFFDBox[iFFDBox]->SetOriginalControlPoints();
+    for (iFFDBox = 0; iFFDBox < nFFDBox; iFFDBox++)
+      ResetFFDBox[iFFDBox]->SetOriginalControlPoints();
   }
 
+  /*--- Check if this DV applies to this FFD box ---*/
   design_FFDBox = config->GetFFDTag(iDV);
 
-  // NOTE: N_out is less than the total number of FFD planes since bounding planes are disregarded.
-
-  if (rank == MASTER_NODE)
+  if (design_FFDBox.compare(FFDBox->GetTag()) != 0) 
   {
-    std::cout <<"About to print chord arary " <<std::endl;
-    std::cout <<"Number of slices: " << Num_slice << std::endl;
-    for (int i = 0; i < Num_slice; ++i)
+    return false;
+  }
+
+  /*--- Spanwise index (FFD j-plane) for this DV ---*/
+  jOrder = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
+
+  /*--- Do not move fixed J-planes ---*/
+  for (iPlane = 0; iPlane < FFDBox->Get_nFix_JPlane(); iPlane++) 
+  {
+    if (jOrder == FFDBox->Get_Fix_JPlane(iPlane)) 
     {
-          std::cout << "Slice index:" << chord_array_[i][0]
-                        << ", Y = " << chord_array_[i][1]
-                        << ", Xmin = " << chord_array_[i][2]
-                        << ", Xmax = " << chord_array_[i][3]
-                        << ", Chord Length = " << chord_array_[i][4]
-                        << ", Quarter chord = " << chord_array_[i][5]
-                        << ", Z location = " << chord_array_[i][6]
-                        << std::endl;
+      if (rank == MASTER_NODE) 
+      {
+        std::cout << "FFD_TWIST: j-plane " << jOrder
+                  << " is fixed. Skipping twist." << std::endl;
+      }
+      return false;
     }
   }
 
-  /*--- Check if the design variable applies to this FFD box---*/
-  if (design_FFDBox.compare(FFDBox->GetTag()) == 0) 
+  /*--- Find the slice index corresponding to this jOrder ---*/
+  int idx = -1;
+
+  // chord_array_[m] = { slice_id, Y, xmin, xmax, chord, x_quarter, z_qc }
+  for (int m = 0; m < Num_slice; ++m) 
   {
-    /*--- Check that it is possible to move the control point ---*/
-
-    jOrder = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
-    for (iPlane = 0; iPlane < FFDBox->Get_nFix_JPlane(); iPlane++) 
+    int slice_id = static_cast<int>(chord_array_[m][0]); // 1-based index
+    if (slice_id == static_cast<int>(jOrder)) 
     {
-      if (jOrder == FFDBox->Get_Fix_JPlane(iPlane)) return false;
+      idx = m;
+      break;
     }
+  }
 
-  
-
-    /*--- Line plane intersection to find the origin of rotation ---*/
-
-    /*--- P0: First point on the line---*/
-    Segment_P0[0] = config->GetParamDV(iDV, 2);
-    Segment_P0[1] = config->GetParamDV(iDV, 3);
-    Segment_P0[2] = config->GetParamDV(iDV, 4);
-
-    /*--- P1: Last point on the line---*/
-    Segment_P1[0] = config->GetParamDV(iDV, 5);
-    Segment_P1[1] = config->GetParamDV(iDV, 6);
-    Segment_P1[2] = config->GetParamDV(iDV, 7);
-
-    iOrder = 0;
-    jOrder = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
-    kOrder = 0;
-    su2double* coord = FFDBox->GetCoordControlPoints(iOrder, jOrder, kOrder);
-
-    /*--- Get an arbitrary point on the plane ---*/
-    Plane_P0[0] = coord[0];
-    Plane_P0[1] = coord[1];
-    Plane_P0[2] = coord[2];
-
-    /*---Reference plane is spanwise normal [0,1,0]---*/
-    Plane_Normal[0] = 0.0;
-    Plane_Normal[1] = 1.0;
-    Plane_Normal[2] = 0.0;
-
-    Variable_P0 = 0.0;
-    Variable_P1 = 0.0;
-
-    Intersection[0] = 0.0;
-    Intersection[1] = 0.0;
-    Intersection[2] = 0.0;
-
-    /*--- COmpute the intersection between the line segment and the plane---*/
-    bool result = geometry->SegmentIntersectsPlane(Segment_P0, Segment_P1, Variable_P0, Variable_P1, Plane_P0,
-                                                   Plane_Normal, Intersection, Variable_Interp);
-
-    /*--- result is true if scalar t is greater than 0 ---*/
-    if (result) 
+  /*--- Fallback: pick closest Y if direct slice_id match fails ---*/
+  if (idx == -1) 
+  {
+    if (Num_slice == 0) 
     {
-      /*--- xyz-coordinates of a point on the line of rotation. ---*/
-
-      su2double a = Intersection[0];
-      su2double b = Intersection[1];
-      su2double c = Intersection[2];
-
-      /*--- xyz-coordinate of the line's direction vector. ---*/
-      /*--- This is set by default as normal to the spanwise plane -> [0, 1, 0] ---*/
-
-      su2double u = Plane_Normal[0];
-      su2double v = Plane_Normal[1];
-      su2double w = Plane_Normal[2];
-
-      /*--- The angle of rotation is computed based on a characteristic length of the wing,
-       otherwise it is difficult to compare with other length based design variables. ---*/
-
-      su2double RefLength = config->GetRefLength();
-      su2double theta = atan(config->GetDV_Value(iDV) * Scale / RefLength);
-
-      /*--- An intermediate value used in computations. ---*/
-
-      su2double u2 = u * u;
-      su2double v2 = v * v;
-      su2double w2 = w * w;
-      su2double l2 = u2 + v2 + w2;
-      su2double l = sqrt(l2);
-      su2double cosT;
-      su2double sinT;
-
-      /*--- Change the value of the control point if move is true ---*/
-
-      jOrder = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
-      for (iOrder = 0; iOrder < FFDBox->GetlOrder(); iOrder++)
-        for (kOrder = 0; kOrder < FFDBox->GetnOrder(); kOrder++) {
-          index[0] = iOrder;
-          index[1] = jOrder;
-          index[2] = kOrder;
-          su2double* coord = FFDBox->GetCoordControlPoints(iOrder, jOrder, kOrder);
-          x = coord[0];
-          y = coord[1];
-          z = coord[2];
-
-          cosT = cos(theta);
-          sinT = sin(theta);
-
-          /*--- Apply Rodrigues' formula to compute the rotation---*/
-
-          /*  (x,y,z) -> original FFD control point
-              (a,b,c) -> intersection point of line and normal plane -> origin of rotation
-              (u,v,w) -> rotation axis [0,1,0]
-              cosT, sinT -> rotation magnitude
-           */
-
-          movement[0] = a * (v2 + w2) + u * (-b * v - c * w + u * x + v * y + w * z) +
-                        (-a * (v2 + w2) + u * (b * v + c * w - v * y - w * z) + (v2 + w2) * x) * cosT +
-                        l * (-c * v + b * w - w * y + v * z) * sinT;
-          movement[0] = movement[0] / l2 - x;
-
-          movement[1] = b * (u2 + w2) + v * (-a * u - c * w + u * x + v * y + w * z) +
-                        (-b * (u2 + w2) + v * (a * u + c * w - u * x - w * z) + (u2 + w2) * y) * cosT +
-                        l * (c * u - a * w + w * x - u * z) * sinT;
-          movement[1] = movement[1] / l2 - y;
-
-          movement[2] = c * (u2 + v2) + w * (-a * u - b * v + u * x + v * y + w * z) +
-                        (-c * (u2 + v2) + w * (a * u + b * v - u * x - v * y) + (u2 + v2) * z) * cosT +
-                        l * (-b * u + a * v - v * x + u * y) * sinT;
-          movement[2] = movement[2] / l2 - z;
-
-          /*--- Check that it is possible to move the control point ---*/
-
-          for (iPlane = 0; iPlane < FFDBox->Get_nFix_IPlane(); iPlane++) {
-            if (iOrder == FFDBox->Get_Fix_IPlane(iPlane)) {
-              movement[0] = 0.0;
-              movement[1] = 0.0;
-              movement[2] = 0.0;
-            }
-          }
-
-          for (iPlane = 0; iPlane < FFDBox->Get_nFix_KPlane(); iPlane++) {
-            if (kOrder == FFDBox->Get_Fix_KPlane(iPlane)) {
-              movement[0] = 0.0;
-              movement[1] = 0.0;
-              movement[2] = 0.0;
-            }
-          }
-
-          FFDBox->SetControlPoints(index, movement);
-        }
-    }
-
-    /* Print out the twist planes where no rotation was found! */
-    if (!result)
-    {
-      if (rank == MASTER_NODE)
+      if (rank == MASTER_NODE) 
       {
-        std::cout << "*****************************" << std::endl;
-        std::cout << " SEGMENT DOES NOT INTERSECT FFD PLANE: NO ROTTION POINT FOUND!" << std::endl;
-        std::cout << " Control point location: " << Plane_P0[0] <<" , "<< Plane_P0[1] <<" , "<<Plane_P0[2] << std::endl;
-        std::cout << " Segment start location: " << Segment_P0[0] <<" , "<< Segment_P0[1] <<" , "<< Segment_P0[2] << std::endl;
-        std::cout << " Segment end location: " << Segment_P1[0] <<" , "<< Segment_P1[1]<<" , "<< Segment_P1[2] << std::endl;
-        std::cout << "*****************************" << std::endl;
+        std::cout << "FFD_TWIST: chord_array_ is empty. Cannot define rotation point."
+                  << std::endl;
+      }
+      return false;
+    }
+
+    // Use FFD plane Y as target and find closest chord_array_ entry
+    su2double* coord_ref = FFDBox->GetCoordControlPoints(0, jOrder, 0);
+    su2double y_target   = coord_ref[1];
+
+    su2double best = std::numeric_limits<su2double>::infinity();
+    for (int m = 0; m < Num_slice; ++m) 
+    {
+      su2double dy = std::abs(chord_array_[m][1] - y_target);
+      if (dy < best) 
+      {
+        best = dy;
+        idx  = m;
       }
     }
   }
-   else 
-   {
-   
+
+  if (idx == -1) 
+  {
+    if (rank == MASTER_NODE) 
+    {
+      std::cout << "FFD_TWIST: No matching spanwise slice found for jOrder = "
+                << jOrder << ". Skipping twist." << std::endl;
+    }
     return false;
+  }
+
+  if (idx >= N_tangent_) 
+  {
+    if (rank == MASTER_NODE) 
+    {
+      std::cout << "FFD_TWIST: idx = " << idx
+                << " exceeds N_tangent_ = " << N_tangent_
+                << ". Skipping twist." << std::endl;
+    }
+    return false;
+  }
+
+  /*--- Origin of rotation: quarter-chord point at this span station ---*/
+  // chord_array_[idx] = { slice_id, Y, xmin, xmax, chord, x_quarter, z_qc }
+  su2double a = chord_array_[idx][5]; // x_quarter
+  su2double b = chord_array_[idx][1]; // spanwise Y
+  su2double c = chord_array_[idx][6]; // z at quarter-chord
+
+  /*--- Axis of rotation: local spanwise tangent (from getNormalVector) ---*/
+  // tangent_normal_array_[idx] = { slice_idx, Y, Tx, Ty, Tz, Nx, Ny }
+  su2double u = tangent_normal_array_[idx][2]; // Tx
+  su2double v = tangent_normal_array_[idx][3]; // Ty
+  su2double w = tangent_normal_array_[idx][4]; // Tz
+
+  /*--- Compute twist angle from DV (length-based DV → angle via atan) ---*/
+  su2double RefLength = config->GetRefLength();
+  su2double theta     = atan(config->GetDV_Value(iDV) * Scale / RefLength);
+
+  /*--- Precompute axis norms ---*/
+  su2double u2 = u*u;
+  su2double v2 = v*v;
+  su2double w2 = w*w;
+  su2double l2 = u2 + v2 + w2;
+  su2double l  = sqrt(l2);
+
+  if (l2 <= std::numeric_limits<su2double>::epsilon()) 
+  {
+    if (rank == MASTER_NODE) 
+    {
+      std::cout << "FFD_TWIST: rotation axis has near-zero length. Skipping."
+                << std::endl;
+    }
+    return false;
+  }
+
+  su2double cosT = cos(theta);
+  su2double sinT = sin(theta);
+
+  if (rank == MASTER_NODE) 
+  {
+    std::cout << "FFD_TWIST: Using local axis for jOrder = " << jOrder
+              << " slice idx = " << idx << std::endl;
+    std::cout << "  Origin (a,b,c) = (" << a << ", " << b << ", " << c << ")\n";
+    std::cout << "  Axis   (u,v,w) = (" << u << ", " << v << ", " << w << ")\n";
+    std::cout << "  theta = " << theta << " [rad]" << std::endl;
+  }
+
+  /*--- Apply twist: rotate all control points in this j-plane about axis (a,b,c,u,v,w) ---*/
+  jOrder = SU2_TYPE::Int(config->GetParamDV(iDV, 1));
+
+  for (iOrder = 0; iOrder < FFDBox->GetlOrder(); iOrder++) 
+  {
+    for (kOrder = 0; kOrder < FFDBox->GetnOrder(); kOrder++) 
+    {
+
+      index[0] = iOrder;
+      index[1] = jOrder;
+      index[2] = kOrder;
+
+      su2double* coord_cp = FFDBox->GetCoordControlPoints(iOrder, jOrder, kOrder);
+      x = coord_cp[0];
+      y = coord_cp[1];
+      z = coord_cp[2];
+
+      /*--- Rodrigues’ rotation formula around axis passing through (a,b,c) ---*/
+
+      su2double term1_x = a * (v2 + w2)
+                        + u * (-b * v - c * w + u * x + v * y + w * z);
+      su2double term2_x = -a * (v2 + w2)
+                        + u * (b * v + c * w - v * y - w * z)
+                        + (v2 + w2) * x;
+      su2double term3_x = -c * v + b * w - w * y + v * z;
+
+      su2double x_rot = term1_x
+                       + term2_x * cosT
+                       + l * term3_x * sinT;
+      x_rot /= l2;
+
+      su2double term1_y = b * (u2 + w2)
+                        + v * (-a * u - c * w + u * x + v * y + w * z);
+      su2double term2_y = -b * (u2 + w2)
+                        + v * (a * u + c * w - u * x - w * z)
+                        + (u2 + w2) * y;
+      su2double term3_y =  c * u - a * w + w * x - u * z;
+
+      su2double y_rot = term1_y
+                       + term2_y * cosT
+                       + l * term3_y * sinT;
+      y_rot /= l2;
+
+      su2double term1_z = c * (u2 + v2)
+                        + w * (-a * u - b * v + u * x + v * y + w * z);
+      su2double term2_z = -c * (u2 + v2)
+                        + w * (a * u + b * v - u * x - v * y)
+                        + (u2 + v2) * z;
+      su2double term3_z = -b * u + a * v - v * x + u * y;
+
+      su2double z_rot = term1_z
+                       + term2_z * cosT
+                       + l * term3_z * sinT;
+      z_rot /= l2;
+
+      /*--- Movement = rotated position minus original position ---*/
+      movement[0] = x_rot - x;
+      movement[1] = y_rot - y;
+      movement[2] = z_rot - z;
+
+      /*--- Respect fixed I- and K-planes ---*/
+      for (iPlane = 0; iPlane < FFDBox->Get_nFix_IPlane(); iPlane++) 
+      {
+        if (iOrder == FFDBox->Get_Fix_IPlane(iPlane)) 
+        {
+          movement[0] = 0.0;
+          movement[1] = 0.0;
+          movement[2] = 0.0;
+        }
+      }
+
+      for (iPlane = 0; iPlane < FFDBox->Get_nFix_KPlane(); iPlane++) 
+      {
+        if (kOrder == FFDBox->Get_Fix_KPlane(iPlane)) 
+        {
+          movement[0] = 0.0;
+          movement[1] = 0.0;
+          movement[2] = 0.0;
+        }
+      }
+
+      /*--- Apply deformation to this control point ---*/
+      FFDBox->SetControlPoints(index, movement);
+    }
   }
 
   return true;

@@ -660,6 +660,7 @@ private:
   Deform_PoissonRatio,               /*!< \brief Poisson's ratio for volume deformation stiffness model */
   Deform_StiffLayerSize;             /*!< \brief Size of the layer of highest stiffness for wall distance-based mesh stiffness */
   bool FFD_Symmetry_Plane;           /*!< \brief FFD symmetry plane. */
+  bool FFD_Tailored;                  /*!< \brief Read FFD lattice definition from csv */
 
   su2double Mach;             /*!< \brief Mach number. */
   su2double Reynolds;         /*!< \brief Reynolds number. */
@@ -4376,6 +4377,12 @@ public:
    * \return <code>TRUE</code> if there is a symmetry plane in the FFD; otherwise <code>FALSE</code>.
    */
   bool GetFFD_Symmetry_Plane(void) const { return FFD_Symmetry_Plane; }
+
+  /*!
+   * \brief Read FFD lattice points from a csv file.
+   * \return <code>TRUE</code> if to read lattice from a csv file; otherwise <code>FALSE</code>.
+   */
+  bool GetFFD_Tailored(void) const { return FFD_Tailored; }
 
   /*!
    * \brief Get the kind of SU2 software component.

@@ -444,9 +444,16 @@ class CFreeFormDefBox : public CGridMovement {
   void SetControlPoints_Parallelepiped(void);
 
   /*!
+   * \brief Read and set control points from a csv file
+   */
+  void ReadControlPointsFromCSV(void);
+
+  /*!
    * \brief Set the control points of the final chuck in a unitary hexahedron free form.
    * \param[in] FFDBox - Original FFDBox where we want to compute the control points.
    */
+
+
   void SetSupportCP(CFreeFormDefBox* FFDBox);
 
   /*!

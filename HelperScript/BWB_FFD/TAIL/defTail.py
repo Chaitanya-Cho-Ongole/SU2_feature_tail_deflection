@@ -15,6 +15,11 @@ Z bounds:
 
 Also computes and prints the quarter-chord position for the box:
   x_c4 = XMIN + 0.25*(XMAX - XMIN)
+
+NEW in this script:
+  - Writes Tecplot360 ASCII .dat files (XYZ only):
+      * <BOX_NAME>_ffd_box.dat   : wireframe FELINESEG
+      * <BOX_NAME>_ffd_ctrl.dat  : control points as degenerate FELINESEG (i->i)
 """
 
 import numpy as np
@@ -24,7 +29,7 @@ import subprocess
 # -----------------------------
 # Inputs
 # -----------------------------
-VTU_FILE = "surface_deformed.vtu"
+VTU_FILE = "surface_flow.vtu"
 
 # Hard bounds (meters)
 XMIN = 36.0
@@ -69,6 +74,14 @@ DRAW_BOX = True
 DRAW_CTRL_POINTS = True
 CTRL_POINT_SIZE = 12
 
+# -----------------------------
+# Tecplot outputs (XYZ only)
+# -----------------------------
+WRITE_TEC_BOX_DAT = True
+WRITE_TEC_CTRL_DAT = True
+TEC_BOX_FILE = f"{BOX_NAME}_ffd_box.dat"
+TEC_CTRL_FILE = f"{BOX_NAME}_ffd_ctrl.dat"
+
 
 def fmt_pt(p):
     return f"{p[0]:.10e}, {p[1]:.10e}, {p[2]:.10e}"
@@ -109,6 +122,15 @@ def hexa_wireframe(corners):
     poly = pv.PolyData(np.array(pts))
     poly.lines = np.array(lines)
     return poly
+
+
+def hexa_wireframe_edges(corners):
+    p1, p2, p3, p4, p5, p6, p7, p8 = corners
+    return [
+        (p1, p2), (p2, p3), (p3, p4), (p4, p1),
+        (p5, p6), (p6, p7), (p7, p8), (p8, p5),
+        (p1, p5), (p2, p6), (p3, p7), (p4, p8),
+    ]
 
 
 def trilinear_ctrl_points(corners, deg_x, deg_y, deg_z):
@@ -154,7 +176,7 @@ def run_set_ffd_for_box(box_name, ni, nj, nk, run=False):
 def estimate_local_z_bounds(points):
     """
     Estimate z-bounds from points in an (expanded) XY window around [XMIN,XMAX]x[YMIN,YMAX].
-    Uses robust percentiles then applies PAD_Z based on local z thickness.
+    Uses robust percentiles.
     Returns zlo_raw, zhi_raw (percentile bounds), plus sample info.
     """
     x = points[:, 0]
@@ -184,6 +206,57 @@ def estimate_local_z_bounds(points):
     return float(z.min()), float(z.max()), int(points.shape[0]), ("GLOBAL", "GLOBAL", "GLOBAL", "GLOBAL")
 
 
+def write_tecplot_xyz_lineseg(filename, title, segments):
+    """
+    Tecplot ASCII line zone: ZONETYPE=FELINESEG, XYZ only.
+    segments: list of (pA, pB)
+    """
+    pts = []
+    conn = []
+    idx = 1  # 1-based
+    for a, b in segments:
+        pts.append(a); pts.append(b)
+        conn.append((idx, idx + 1))
+        idx += 2
+
+    pts = np.asarray(pts, dtype=float)
+    n = pts.shape[0]
+    e = len(conn)
+
+    with open(filename, "w") as f:
+        f.write(f'TITLE = "{title}"\n')
+        f.write('VARIABLES = "X", "Y", "Z"\n')
+        f.write(f'ZONE T="{title}", N={n}, E={e}, ZONETYPE=FELINESEG, DATAPACKING=POINT\n')
+        for p in pts:
+            f.write(f"{p[0]:.15e} {p[1]:.15e} {p[2]:.15e}\n")
+        for (i1, i2) in conn:
+            f.write(f"{i1} {i2}\n")
+
+    print(f"# Wrote Tecplot FELINESEG: {filename}  (segments={e})")
+
+
+def write_tecplot_xyz_points(filename, title, xyz):
+    """
+    Tecplot ASCII point cloud, XYZ only, using ZONETYPE=FELINESEG with degenerate segments (i->i).
+    """
+    xyz = np.asarray(xyz, dtype=float)
+    n = xyz.shape[0]
+
+    with open(filename, "w") as f:
+        f.write(f'TITLE = "{title}"\n')
+        f.write('VARIABLES = "X", "Y", "Z"\n')
+        f.write(f'ZONE T="{title}", N={n}, E={n}, ZONETYPE=FELINESEG, DATAPACKING=POINT\n')
+
+        for i in range(n):
+            x, y, z = xyz[i]
+            f.write(f"{x:.15e} {y:.15e} {z:.15e}\n")
+
+        for i in range(1, n + 1):
+            f.write(f"{i} {i}\n")
+
+    print(f"# Wrote Tecplot XYZ point cloud: {filename}  (N={n})")
+
+
 def main():
     mesh = pv.read(VTU_FILE)
     pts = mesh.points
@@ -201,16 +274,15 @@ def main():
     zlo_raw, zhi_raw, n_used, win = estimate_local_z_bounds(pts)
     zth = max(zhi_raw - zlo_raw, 1e-12)
 
-    # First apply your "padding" convention
+    # Apply padding convention
     zmin = zlo_raw - PAD_Z * zth
     zmax = zhi_raw + PAD_Z * zth
 
-    # Then apply extra user-requested symmetric extension
+    # Extra symmetric extension
     z_extra = float(Z_EXT_ABS_M) + float(Z_EXT_FRAC) * zth
     zmin -= z_extra
     zmax += z_extra
 
-    # You might also want a "c/4 point" in 3D; choose z-mid of final bounds:
     z_mid = 0.5 * (zmin + zmax)
 
     # -----------------------------
@@ -260,12 +332,32 @@ def main():
     )
 
     # -----------------------------
-    # set_ffd_design_var.py call (kept consistent with your earlier script)
+    # set_ffd_design_var.py call (optional)
     # -----------------------------
     print("\n# --------------------------------------------")
     print("# set_ffd_design_var.py call (single box)")
     print("# --------------------------------------------\n")
     run_set_ffd_for_box(BOX_NAME, int(DEG_X), int(DEG_Y), int(DEG_Z), run=RUN_SET_FFD)
+
+    # -----------------------------
+    # Tecplot outputs (XYZ only)
+    # -----------------------------
+    if WRITE_TEC_BOX_DAT:
+        segs = hexa_wireframe_edges(corners)
+        write_tecplot_xyz_lineseg(
+            TEC_BOX_FILE,
+            title=f"{BOX_NAME} FFD Box Wireframe",
+            segments=segs,
+        )
+
+    if WRITE_TEC_CTRL_DAT:
+        ctrl = trilinear_ctrl_points(corners, int(DEG_X), int(DEG_Y), int(DEG_Z))
+        ctrl_pts = ctrl.reshape(-1, 3)
+        write_tecplot_xyz_points(
+            TEC_CTRL_FILE,
+            title=f"{BOX_NAME} FFD Control Points",
+            xyz=ctrl_pts,
+        )
 
     # -----------------------------
     # DRAW (PyVista)

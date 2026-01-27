@@ -2702,6 +2702,9 @@ void CConfig::SetConfig_Options() {
   /* DESCRIPTION: FFD symmetry plane (j=0) */
   addBoolOption("FFD_SYMMETRY_PLANE", FFD_Symmetry_Plane, false);
 
+  /* DESCRIPTION: Tailored FFD lattice definition from csv */
+  addBoolOption("FFD_TAILORED", FFD_Tailored, false);
+
   /* DESCRIPTION: Define different coordinates systems for the FFD */
   addEnumOption("FFD_COORD_SYSTEM", FFD_CoordSystem, CoordSystem_Map, CARTESIAN);
 

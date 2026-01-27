@@ -49,6 +49,8 @@ class CSurfaceMovement : public CGridMovement {
   vector<string> GlobalTag[MAX_NUMBER_FFD];
   vector<unsigned long> GlobalPoint[MAX_NUMBER_FFD];
   vector<std::array<su2double, 7 >> chord_array_;
+  su2double** tangent_normal_array_;
+  int N_tangent_;
   int Num_slice;
     
     

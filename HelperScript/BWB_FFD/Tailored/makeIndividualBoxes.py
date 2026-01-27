@@ -6,7 +6,7 @@ import subprocess
 # -----------------------------
 # Inputs
 # -----------------------------
-VTU_FILE = "surface_deformed.vtu"
+VTU_FILE = "surface_flow.vtu"
 
 # Spanwise segmentation (15 boxes => 16 stations)
 DEG_Y = 15
@@ -55,6 +55,15 @@ MESH_OPACITY = 0.60
 DRAW_BOXES = True
 DRAW_CTRL_POINTS = True
 CTRL_POINT_SIZE = 10
+
+# -----------------------------
+# Tecplot outputs
+# -----------------------------
+WRITE_TEC_CTRL_DAT = True
+TEC_CTRL_DAT_FILE = f"{BOX_PREFIX}_ffd_ctrl_points.dat"
+
+WRITE_TEC_BOX_WIREFRAME_DAT = True
+TEC_BOX_DAT_FILE = f"{BOX_PREFIX}_ffd_boxes_wireframe.dat"
 
 
 def spanwise_profiles(points, y_stations, half_window):
@@ -123,23 +132,13 @@ def su2_hexa_corners(xmin0, xmax0, y0, zmin0, zmax0,
     return [p1, p2, p3, p4, p5, p6, p7, p8]
 
 
-def hexa_wireframe(corners):
+def hexa_wireframe_edges(corners):
     p1, p2, p3, p4, p5, p6, p7, p8 = corners
-    edges = [
+    return [
         (p1, p2), (p2, p3), (p3, p4), (p4, p1),
         (p5, p6), (p6, p7), (p7, p8), (p8, p5),
         (p1, p5), (p2, p6), (p3, p7), (p4, p8),
     ]
-    pts = []
-    lines = []
-    idx = 0
-    for a, b in edges:
-        pts.append(a); pts.append(b)
-        lines.extend([2, idx, idx + 1])
-        idx += 2
-    poly = pv.PolyData(np.array(pts))
-    poly.lines = np.array(lines)
-    return poly
 
 
 def trilinear_ctrl_points(corners, deg_x, deg_y, deg_z):
@@ -155,14 +154,14 @@ def trilinear_ctrl_points(corners, deg_x, deg_y, deg_z):
         for j, y in enumerate(eta):
             for k, z in enumerate(zeta):
                 ctrl[i, j, k, :] = (
-                    (1-x)*(1-y)*(1-z)*p1 +
-                    x*(1-y)*(1-z)*p2 +
-                    x*y*(1-z)*p3 +
-                    (1-x)*y*(1-z)*p4 +
-                    (1-x)*(1-y)*z*p5 +
-                    x*(1-y)*z*p6 +
-                    x*y*z*p7 +
-                    (1-x)*y*z*p8
+                    (1 - x) * (1 - y) * (1 - z) * p1 +
+                    x * (1 - y) * (1 - z) * p2 +
+                    x * y * (1 - z) * p3 +
+                    (1 - x) * y * (1 - z) * p4 +
+                    (1 - x) * (1 - y) * z * p5 +
+                    x * (1 - y) * z * p6 +
+                    x * y * z * p7 +
+                    (1 - x) * y * z * p8
                 )
     return ctrl
 
@@ -182,6 +181,64 @@ def run_set_ffd_for_box(box_name, ni, nj, nk, run=False):
         print(" ".join(cmd))
 
 
+def write_tecplot_ctrl_points_xyz(filename, title, xyz):
+    """
+    Tecplot ASCII point cloud using FELINESEG with degenerate segments.
+    Variables: X Y Z only.
+    """
+    xyz = np.asarray(xyz, dtype=float)
+    n = xyz.shape[0]
+
+    with open(filename, "w") as f:
+        f.write(f'TITLE = "{title}"\n')
+        f.write('VARIABLES = "X", "Y", "Z"\n')
+        f.write(f'ZONE T="{title}", N={n}, E={n}, ZONETYPE=FELINESEG, DATAPACKING=POINT\n')
+
+        # coordinates
+        for i in range(n):
+            x, y, z = xyz[i]
+            f.write(f"{x:.15e} {y:.15e} {z:.15e}\n")
+
+        # degenerate line segments (i -> i)
+        for i in range(1, n + 1):
+            f.write(f"{i} {i}\n")
+
+    print(f"# Wrote Tecplot XYZ control points: {filename} (N={n})")
+
+
+
+
+
+def write_tecplot_line_zone(filename, title, segments):
+    """
+    Write Tecplot ASCII .dat with a single line zone using FE LINES.
+    segments: list of (pA, pB) with pA/pB shape (3,)
+    """
+    # Build point list + connectivity
+    pts = []
+    conn = []
+    idx = 1  # Tecplot connectivity is 1-based
+    for a, b in segments:
+        pts.append(a); pts.append(b)
+        conn.append((idx, idx + 1))
+        idx += 2
+
+    pts = np.asarray(pts, dtype=float)
+    n = pts.shape[0]
+    e = len(conn)
+
+    with open(filename, "w") as f:
+        f.write(f'TITLE = "{title}"\n')
+        f.write('VARIABLES = "X", "Y", "Z"\n')
+        f.write(f'ZONE T="{title}", N={n}, E={e}, ZONETYPE=FELINESEG, DATAPACKING=POINT\n')
+        for p in pts:
+            f.write(f"{p[0]:.15e} {p[1]:.15e} {p[2]:.15e}\n")
+        for (i1, i2) in conn:
+            f.write(f"{i1} {i2}\n")
+
+    print(f"# Wrote Tecplot line zone: {filename}  (segments={e})")
+
+
 def main():
     mesh = pv.read(VTU_FILE)
     pts = mesh.points
@@ -197,7 +254,7 @@ def main():
     # Profiles
     xLE, xTE, zlo, zhi = spanwise_profiles(pts, y_st, half_window)
     chord = np.maximum(xTE - xLE, 1e-12)
-    zth   = np.maximum(zhi - zlo, 1e-12)
+    zth = np.maximum(zhi - zlo, 1e-12)
 
     # Tapered bounds with padding (station-wise)
     xmin = xLE - PAD_LE * chord
@@ -228,7 +285,7 @@ def main():
         all_boxes_corners.append(corners)
 
     # -----------------------------
-    # PRINT SU2 blocks (grouped by deg_x)
+    # PRINT SU2 blocks
     # -----------------------------
     print("\n# --------------------------------------------")
     print("# SU2 FFD: tapered spanwise boxes from VTU")
@@ -241,9 +298,6 @@ def main():
     for j in range(N_BOXES):
         print(f"#  {j:02d} : {deg_x_box[j]}   (c~{chord_box[j]:.6e})")
 
-    # -----------------------------
-    # PRINT SU2 FFD blocks (SEQUENTIAL, one box at a time)
-    # -----------------------------
     print("\n# --------------------------------------------")
     print("# SU2 FFD boxes (sequential, per-box degree)")
     print("# --------------------------------------------\n")
@@ -268,10 +322,6 @@ def main():
             f"{fmt_pt(corners[6])}, {fmt_pt(corners[7])})\n"
         )
 
-
-    # -----------------------------
-    # set_ffd_design_var.py calls (ONE call per box)
-    # -----------------------------
     print("\n# --------------------------------------------")
     print("# set_ffd_design_var.py calls (ONE per box)")
     print("# --------------------------------------------\n")
@@ -289,24 +339,57 @@ def main():
         run_set_ffd_for_box(box_name, ni, nj, nk, run=RUN_SET_FFD)
 
     # -----------------------------
+    # Collect control points + wireframe segments for Tecplot outputs
+    # -----------------------------
+    all_ctrl_pts = []
+    all_ctrl_box = []
+    all_ctrl_degx = []
+
+    all_segments = []  # box wireframe segments
+
+    for j, corners in enumerate(all_boxes_corners):
+        if DRAW_CTRL_POINTS:
+            ctrl = trilinear_ctrl_points(corners, int(deg_x_box[j]), 1, DEG_Z)
+            pts_j = ctrl.reshape(-1, 3)
+            all_ctrl_pts.append(pts_j)
+            all_ctrl_box.append(np.full(pts_j.shape[0], j, dtype=int))
+            all_ctrl_degx.append(np.full(pts_j.shape[0], int(deg_x_box[j]), dtype=int))
+
+        if DRAW_BOXES:
+            all_segments.extend(hexa_wireframe_edges(corners))
+
+    if len(all_ctrl_pts) > 0:
+        ctrl_pts = np.vstack(all_ctrl_pts)
+        ctrl_box = np.concatenate(all_ctrl_box)
+        ctrl_degx = np.concatenate(all_ctrl_degx)
+
+        if WRITE_TEC_CTRL_DAT:
+            write_tecplot_ctrl_points_xyz(
+                "ffd_ctrl_points.dat",
+                "FFD Control Points",
+                ctrl_pts
+            )
+
+    if WRITE_TEC_BOX_WIREFRAME_DAT and len(all_segments) > 0:
+        write_tecplot_line_zone(
+            TEC_BOX_DAT_FILE,
+            title=f"{BOX_PREFIX} FFD Boxes Wireframe",
+            segments=all_segments,
+        )
+
+    # -----------------------------
     # DRAW (PyVista)
     # -----------------------------
     pl = pv.Plotter()
     pl.add_mesh(mesh, opacity=MESH_OPACITY, show_edges=SHOW_MESH_EDGES)
 
-    all_ctrl_pts = []
-
     if DRAW_BOXES:
-        for j, corners in enumerate(all_boxes_corners):
-            wf = hexa_wireframe(corners)
-            pl.add_mesh(wf, color="black", line_width=2)
-
-            if DRAW_CTRL_POINTS:
-                ctrl = trilinear_ctrl_points(corners, int(deg_x_box[j]), 1, DEG_Z)
-                all_ctrl_pts.append(ctrl.reshape(-1, 3))
+        for corners in all_boxes_corners:
+            # show as black wireframe using line segments
+            for a, b in hexa_wireframe_edges(corners):
+                pl.add_lines(np.vstack([a, b]), color="black", width=2)
 
     if DRAW_CTRL_POINTS and len(all_ctrl_pts) > 0:
-        ctrl_pts = np.vstack(all_ctrl_pts)
         pl.add_points(
             ctrl_pts,
             render_points_as_spheres=True,
