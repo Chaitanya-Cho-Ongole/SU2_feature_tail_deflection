@@ -3291,7 +3291,7 @@ bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFo
   // chord_array_[m] = { slice_id, Y, xmin, xmax, chord, x_quarter, z_qc }
   for (int m = 0; m < Num_slice; ++m) 
   {
-    int slice_id = static_cast<int>(chord_array_[m][0]); // 1-based index
+    int slice_id = SU2_TYPE::Int(chord_array_[m][0]);
     if (slice_id == static_cast<int>(jOrder)) 
     {
       idx = m;
