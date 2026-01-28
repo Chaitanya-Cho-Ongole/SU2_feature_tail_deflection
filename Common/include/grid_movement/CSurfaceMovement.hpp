@@ -299,7 +299,7 @@ class CSurfaceMovement : public CGridMovement {
    * \param[in] iFFDBox - Index of FFD box.
    * \return A 2D array consiting of spanwise FFD index and a rotation point at the local station
    */
-  su2double** getRotationPoint(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
+  void getRotationPoint(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
     int& N_out);
 
     /*!
@@ -433,6 +433,18 @@ class CSurfaceMovement : public CGridMovement {
    */
   bool SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, CFreeFormDefBox** ResetFFDBox,
                    unsigned short iDV, bool ResetDef) const;
+
+  /*!
+   * \brief A wrapper for SetFFDTwist() 
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] chord - An array with spanwise local reference line definition
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] FFDBox - Array with all the free forms FFDBoxes of the computation.
+   * \param[in] iDV - Index of the design variable.
+   * \param[in] ResetDef - Reset the deformation before starting a new one.
+   */
+  bool ApplyFFDTwist(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, CFreeFormDefBox** ResetFFDBox,unsigned short iFFDBox, 
+                      unsigned short iDV, bool ResetDef);
 
   /*!
    * \brief Set a rotation angle deformation of the Free From box using the control point position.

@@ -2116,7 +2116,7 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
   return tangent_normal_array;
 }
 
-su2double** CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, int& N_out)
+void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, int& N_out)
 {
   // Allocate memory for local coordinates
  su2double* X_local = new su2double[MAX_POINTS];
@@ -3234,6 +3234,43 @@ bool CSurfaceMovement::SetFFDTaper(CGeometry* geometry, CConfig* config, CFreeFo
 }
 
 return true;
+}
+
+/* This is called by SU2_GEO to evaluate surface-adaptive gradients */
+bool CSurfaceMovement::ApplyFFDTwist(CGeometry* geometry, CConfig* config,
+                                     CFreeFormDefBox* FFDBox,
+                                     CFreeFormDefBox** ResetFFDBox,
+                                     unsigned short iFFDBox,
+                                     unsigned short iDV,
+                                     bool ResetDef)
+{
+  if (rank == MASTER_NODE) {
+    std::cout << "ApplyFFDTwist: precomputing rotation points and tangents\n";
+  }
+
+  // STEP 1: rotation points (fills chord_array_ and sets Num_slice via N_out)
+  int Num_slice_local = 0;
+  getRotationPoint(geometry, config, FFDBox, iFFDBox, Num_slice_local);
+  //Num_slice_local is computed inside getRotationPoint()
+  Num_slice = Num_slice_local; 
+
+  // STEP 2: tangents/normals (fills tangent_normal_array_, N_tangent_)
+  // Free any previous tangent_normal_array_ to avoid leaks
+  if (tangent_normal_array_ != nullptr) {
+    for (int i = 0; i < N_tangent_; ++i) {
+      delete[] tangent_normal_array_[i];
+    }
+    delete[] tangent_normal_array_;
+    tangent_normal_array_ = nullptr;
+  }
+
+  int N_tangent_local = 0;
+  su2double** tn_array = getNormalVector(geometry, config, FFDBox, iFFDBox, N_tangent_local);
+  tangent_normal_array_ = tn_array;
+  N_tangent_ = N_tangent_local;
+
+  // STEP 3: now do the actual twist with the low–level routine
+  return SetFFDTwist(geometry, config, FFDBox, ResetFFDBox, iDV, ResetDef);
 }
 
 bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox,

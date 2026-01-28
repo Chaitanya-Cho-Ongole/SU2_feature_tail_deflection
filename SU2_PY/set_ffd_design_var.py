@@ -312,52 +312,51 @@ if options.dim == 3:
     print(dvList)
 
     print(" ")
-    print("% FFD_CAMBER, FFD_TWIST, FFD_THICKNESS, FFD_TAPER")
-
-    iVariable = 0
-    dvList = "DEFINITION_DV= "
-    for jIndex in range(options.jOrder):
-        for iIndex in range(options.iOrder):
-            iVariable = iVariable + 1
-            dvList = (
-                dvList + "( 14, " + str(options.scale) + " | " + options.marker + " | "
-            )
-            dvList = (
-                dvList + options.ffd_id + ", " + str(iIndex) + ", " + str(jIndex) + " )"
-            )
-            dvList = dvList + "; "
-    iVariable = 0
-    for jIndex in range(options.jOrder):
-        iVariable = iVariable + 1
-        dvList = dvList + "( 15, " + str(options.scale) + " | " + options.marker + " | "
-        dvList = (
-            dvList + options.ffd_id + ", " + str(jIndex) + ", " + options.axis + " )"
+print("% FFD_CAMBER")
+dvList = "DEFINITION_DV= "
+for jIndex in range(options.jOrder):
+    for iIndex in range(options.iOrder):
+        dvList += (
+            f"( 14, {options.scale} | {options.marker} | "
+            f"{options.ffd_id}, {iIndex}, {jIndex} ); "
         )
-        if iVariable < (options.jOrder):
-            dvList = dvList + "; "
-    iVariable = 0
-    for jIndex in range(options.jOrder):
-        for iIndex in range(options.iOrder):
-            iVariable = iVariable + 1
-            dvList = (
-                dvList + "( 16, " + str(options.scale) + " | " + options.marker + " | "
-            )
-            dvList = (
-                dvList + options.ffd_id + ", " + str(iIndex) + ", " + str(jIndex) + " )"
-            )
-            dvList = dvList + "; "
-    for jIndex in range(options.jOrder):
-        for iIndex in range(options.iOrder):
-            iVariable = iVariable + 1
-            dvList = (
-                dvList + "( 17, " + str(options.scale) + " | " + options.marker + " | "
-            )
-            dvList = (
-                dvList + options.ffd_id + ", " + str(iIndex) + ", " + str(jIndex) + " )"
-            )
-            dvList = dvList + "; "        
+print(dvList)
 
-    print(dvList)
+
+print("% FFD_TWIST")
+print("NOTE: The origin and end points are dummy variables here. CSurfaceMovement updates these downstream for non-planar span")
+dvList = "DEFINITION_DV= "
+for jIndex in range(options.jOrder):
+    dvList += (
+    f"( 15, {options.scale} | {options.marker} | "
+    f"{options.ffd_id}, {jIndex}, "
+    f"0.0, 0.0, 0.0, 1.0, 1.0, 1.0 )"
+    )
+    if jIndex < options.jOrder - 1:
+        dvList += "; "
+print(dvList)
+
+
+print("% FFD_THICKNESS")
+dvList = "DEFINITION_DV= "
+for jIndex in range(options.jOrder):
+    for iIndex in range(options.iOrder):
+        dvList += (
+            f"( 16, {options.scale} | {options.marker} | "
+            f"{options.ffd_id}, {iIndex}, {jIndex} ); "
+        )
+print(dvList)
+
+
+print("% FFD_TAPER")
+dvList = "DEFINITION_DV= "
+for jIndex in range(options.jOrder):
+    for iIndex in range(options.iOrder):
+        dvList += (
+            f"( 17, {options.scale} | {options.marker} | "
+            f"{options.ffd_id}, {iIndex}, {jIndex} ); "
+        )
+print(dvList)
 
 if options.dim == 2:
 
