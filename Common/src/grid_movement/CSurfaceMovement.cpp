@@ -1929,9 +1929,12 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
 
    if (rank == MASTER_NODE)
    {
+    
+    // Write a new csv file for each FFD box
+    std::ostringstream fname;
+    fname << "tangent_normals_" << FFDBox->GetTag() << ".csv";
 
-    //Compute central finite differnece as tangent approximation using M points
-    std::ofstream outfile("tangent_normals_output.csv");
+    std::ofstream outfile(fname.str());
     outfile << "X,Y,Z,Tangent_X,Tangent_Y,Tangent_Z,Normal_Y,Normal_Z\n";
 
     // Begin computing surface normals + tnagents at root
