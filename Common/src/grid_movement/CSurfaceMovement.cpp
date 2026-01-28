@@ -1996,7 +1996,12 @@ su2double** CSurfaceMovement::getNormalVector(CGeometry* geometry, CConfig* conf
 
     if (M < 2)
     {
-      std::cerr << "WARNING: NOT ENOUGH POINTS TO COMPUTE TANGENTS!";
+      std::cerr << "WARNING: NOT ENOUGH POINTS TO COMPUTE TANGENTS "
+            << "for FFD box '" << FFDBox->GetTag() << "' "
+            << "(FFD_ypoints=" << FFD_ypoints
+            << ", Ymin=" << FFD_ymin
+            << ", Ymax=" << FFD_ymax << ")"
+            << std::endl;
     }
 
     else
