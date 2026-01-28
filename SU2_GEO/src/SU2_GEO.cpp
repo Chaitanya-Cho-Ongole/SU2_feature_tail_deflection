@@ -836,8 +836,14 @@ int main(int argc, char* argv[]) {
                                                                FFDBox[iFFDBox], FFDBox, iDV, true);
               break;
             case FFD_TWIST:
+              
+             /* Call a wrapper to SetFFDTwist() to compute rotationPoint, normal and tangent arrays in one call*/
+              Local_MoveSurface = surface_movement->ApplyFFDTwist(geometry_container[ZONE_0], config_container[ZONE_0],
+                FFDBox[iFFDBox], FFDBox, iFFDBox, iDV, true);
+              /*
               Local_MoveSurface = surface_movement->SetFFDTwist(geometry_container[ZONE_0], config_container[ZONE_0],
                                                                 FFDBox[iFFDBox], FFDBox, iDV, true);
+                                                                */
               break;
             case FFD_ROTATION:
               Local_MoveSurface = surface_movement->SetFFDRotation(geometry_container[ZONE_0], config_container[ZONE_0],
