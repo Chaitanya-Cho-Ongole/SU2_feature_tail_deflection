@@ -3323,6 +3323,7 @@ bool CSurfaceMovement::SetFFDTwist(CGeometry* geometry, CConfig* config, CFreeFo
   }
 
   /*--- Fallback: pick closest Y if direct slice_id match fails ---*/
+  // NOTE: Scans every row of chord_array_ and picks whse Y (col 1) is closest to y_target
   if (idx == -1) 
   {
     if (Num_slice == 0) 
