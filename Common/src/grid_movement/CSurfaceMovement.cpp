@@ -2095,60 +2095,63 @@ if (rank == MASTER_NODE)
   return tangent_normal_array;
 }
 
-void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CFreeFormDefBox* FFDBox, unsigned short iFFDBox, int& N_out)
+void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config,
+                                        CFreeFormDefBox* FFDBox, unsigned short iFFDBox,
+                                        int& N_out)
 {
   // Allocate memory for local coordinates
- su2double* X_local = new su2double[MAX_POINTS];
- su2double* Y_local = new su2double[MAX_POINTS];
- su2double* Z_local = new su2double[MAX_POINTS];
+  su2double* X_local = new su2double[MAX_POINTS];
+  su2double* Y_local = new su2double[MAX_POINTS];
+  su2double* Z_local = new su2double[MAX_POINTS];
 
- // Number of local points
- int N_local = 0;
+  // Number of local points
+  int N_local = 0;
 
- // Extract surface coordinates from the wing marker across all ranks
- for (int i = 0; i < config->GetnMarker_All(); i++)
- {
-    if (config->GetMarker_All_TagBound(i) == "wing") 
+  // Extract surface coordinates from the wing marker across all ranks
+  for (int i = 0; i < config->GetnMarker_All(); i++)
+  {
+    if (config->GetMarker_All_TagBound(i) == "wing")
+    {
+      unsigned short nDim = geometry->GetnDim();
+      for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++)
       {
-        unsigned short nDim = geometry->GetnDim();
-          for (unsigned long iVertex = 0; iVertex < geometry->GetnVertex(i); iVertex++) 
-            {
-              unsigned long iPoint = geometry->vertex[i][iVertex]->GetNode();
-              su2double x = geometry->nodes->GetCoord(iPoint, 0);
-              su2double y = geometry->nodes->GetCoord(iPoint, 1);
-              su2double z = geometry->nodes->GetCoord(iPoint, 2);
-              if (N_local >= MAX_POINTS) break;
-              X_local[N_local] = x;
-              Y_local[N_local] = y;
-              Z_local[N_local] = z;
-              N_local++;
-            }
+        unsigned long iPoint = geometry->vertex[i][iVertex]->GetNode();
+        su2double x = geometry->nodes->GetCoord(iPoint, 0);
+        su2double y = geometry->nodes->GetCoord(iPoint, 1);
+        su2double z = geometry->nodes->GetCoord(iPoint, 2);
+        if (N_local >= MAX_POINTS) break;
+        X_local[N_local] = x;
+        Y_local[N_local] = y;
+        Z_local[N_local] = z;
+        N_local++;
       }
+    }
   }
 
   // Gather the number of points from all ranks to rank 0
   int* recv_counts = nullptr;
-  int* displs = nullptr;
+  int* displs      = nullptr;
 
-  if (rank==MASTER_NODE)
+  if (rank == MASTER_NODE)
   {
     recv_counts = new int[size];
   }
 
-  SU2_MPI::Gather(&N_local, 1, MPI_INT, recv_counts, 1, MPI_INT, 0, SU2_MPI::GetComm());
+  SU2_MPI::Gather(&N_local, 1, MPI_INT,
+                  recv_counts, 1, MPI_INT,
+                  0, SU2_MPI::GetComm());
 
   // Compute total number of points and displacements on rank 0
   int total_points = 0;
 
   if (rank == MASTER_NODE)
   {
-    displs = new int[size];
+    displs    = new int[size];
     displs[0] = 0;
 
     for (int i = 1; i < size; ++i)
-    {
-      displs[i] = displs[i-1] + recv_counts[i-1];
-    }
+      displs[i] = displs[i - 1] + recv_counts[i - 1];
+
     total_points = displs[size - 1] + recv_counts[size - 1];
   }
 
@@ -2157,7 +2160,7 @@ void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CF
   su2double* Y_global = nullptr;
   su2double* Z_global = nullptr;
 
-  if (rank == MASTER_NODE) 
+  if (rank == MASTER_NODE)
   {
     X_global = new su2double[total_points];
     Y_global = new su2double[total_points];
@@ -2165,9 +2168,15 @@ void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CF
   }
 
   // Gather local coordinates to rank 0
-  SU2_MPI::Gatherv(X_local, N_local, MPI_DOUBLE, X_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
-  SU2_MPI::Gatherv(Y_local, N_local, MPI_DOUBLE, Y_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
-  SU2_MPI::Gatherv(Z_local, N_local, MPI_DOUBLE, Z_global, recv_counts, displs, MPI_DOUBLE, 0, SU2_MPI::GetComm());
+  SU2_MPI::Gatherv(X_local, N_local, MPI_DOUBLE,
+                   X_global, recv_counts, displs, MPI_DOUBLE,
+                   0, SU2_MPI::GetComm());
+  SU2_MPI::Gatherv(Y_local, N_local, MPI_DOUBLE,
+                   Y_global, recv_counts, displs, MPI_DOUBLE,
+                   0, SU2_MPI::GetComm());
+  SU2_MPI::Gatherv(Z_local, N_local, MPI_DOUBLE,
+                   Z_global, recv_counts, displs, MPI_DOUBLE,
+                   0, SU2_MPI::GetComm());
 
   // Free local coordinate arrays on remote ranks
   delete[] X_local;
@@ -2179,7 +2188,6 @@ void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CF
     std::cout << "Total points collected: " << total_points << std::endl;
   }
 
-  
   if (rank == MASTER_NODE)
   {
     // Begin computing local reference line
@@ -2187,18 +2195,18 @@ void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CF
     su2double* Yc = new su2double[MAX_POINTS];
     su2double* Zc = new su2double[MAX_POINTS];
 
-    // Get the span-wise extent of the FFD bounding box 
-    su2double FFD_ymin =  config->GetCoordFFDBox(iFFDBox, 1);  // Select the second coordinate
-    su2double FFD_ymax =  config->GetCoordFFDBox(iFFDBox, 7);  // Select the seventh coordinate
+    // Get the span-wise extent of the FFD bounding box
+    su2double FFD_ymin   = config->GetCoordFFDBox(iFFDBox, 1); // second coord
+    su2double FFD_ymax   = config->GetCoordFFDBox(iFFDBox, 7); // seventh coord
     unsigned short FFD_ypoints = config->GetDegreeFFDBox(iFFDBox, 1) + 1;
 
-    std::cout << "FFD_ymin: " << FFD_ymin <<std::endl;
-    std::cout << "FFD_ymax: " << FFD_ymax <<std::endl;
-    std::cout << "FFD_ypoints: " << FFD_ypoints <<std::endl;
-    // We have FFD y degree + 1 FFD Span locations (including the bouding planes)
-    std::cout << "FFD Span degree: " << config->GetDegreeFFDBox(iFFDBox, 1) << std::endl;
+    std::cout << "FFD_ymin: "     << FFD_ymin     << std::endl;
+    std::cout << "FFD_ymax: "     << FFD_ymax     << std::endl;
+    std::cout << "FFD_ypoints: "  << FFD_ypoints  << std::endl;
+    std::cout << "FFD Span degree: "
+              << config->GetDegreeFFDBox(iFFDBox, 1) << std::endl;
 
-    // Slice spacing based on FFD lattice distribution 
+    // Slice spacing based on FFD lattice distribution
     su2double dy = (FFD_ymax - FFD_ymin) / (FFD_ypoints - 1);
 
     chord_array_.clear();
@@ -2209,62 +2217,59 @@ void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CF
     {
       su2double target_y = FFD_ymin + j * dy;
 
-      // Set min x and max x to infinity
-      su2double xmin = -std::numeric_limits<double>::infinity();
-      su2double xmax = std::numeric_limits<double>::infinity();
+      // Find LE and TE in this slice and track their z
+      su2double xmin =  std::numeric_limits<double>::infinity();
+      su2double xmax = -std::numeric_limits<double>::infinity();
+      su2double z_le = 0.0;
+      su2double z_te = 0.0;
 
-      const int MAX_SLICE_POINTS = 100000; // assuming not more than 100,000 points per slice
-      su2double X_slice[MAX_SLICE_POINTS];
       int slice_count = 0;
 
       for (int i = 0; i < total_points; ++i)
       {
         if (std::abs(Y_global[i] - target_y) < 1e-1)
         {
-          if (slice_count < MAX_SLICE_POINTS)
+          slice_count++;
+          su2double xk = X_global[i];
+          su2double zk = Z_global[i];
+
+          if (xk < xmin)
           {
-            X_slice[slice_count] = X_global[i];
-            slice_count++;
+            xmin = xk;
+            z_le = zk;
+          }
+          if (xk > xmax)
+          {
+            xmax = xk;
+            z_te = zk;
           }
         }
       }
 
-      if (slice_count > 0)
+      if (slice_count > 0 && xmax > xmin)
       {
-        su2double xmin = X_slice[0];
-        su2double xmax = X_slice[0];
-
-
-        for (int k = 1; k < slice_count; ++k)
-        {
-          if (X_slice[k] < xmin) xmin = X_slice[k];
-          if (X_slice[k] > xmax) xmax = X_slice[k];
-        }
-
-        su2double chord = xmax - xmin;
+        su2double chord     = xmax - xmin;
         su2double x_quarter = xmin + 0.25 * chord;
-        su2double min_dist = std::numeric_limits<double>::infinity();
-        su2double z_qc = 0.0;
 
-        for (int i = 0; i < total_points; ++i)
-        {
-          if (std::abs(Y_global[i] - target_y) < 1e-1)
-          {
-            su2double dist = std::abs(X_global[i] - x_quarter);
-            if (dist < min_dist)
-            {
-              min_dist = dist;
-              z_qc = Z_global[i];
-            }
-          }
-        }
+        // z on the straight line between (xmin, z_le) and (xmax, z_te)
+        su2double t   = (x_quarter - xmin) / chord; // = 0.25, but keep it general
+        su2double z_qc = z_le + t * (z_te - z_le);
 
-        if (chord > 0.0)
-        {
-          chord_array_.push_back({static_cast<su2double>(chord_array_.size()+1), target_y, xmin, xmax, chord, x_quarter, z_qc});
-        }
+        chord_array_.push_back({
+          static_cast<su2double>(chord_array_.size() + 1), // index
+          target_y,
+          xmin,
+          xmax,
+          chord,
+          x_quarter,
+          z_qc
+        });
       }
     }
+
+    delete[] Xc;
+    delete[] Yc;
+    delete[] Zc;
   }
 
   int M = chord_array_.size();
@@ -2278,7 +2283,8 @@ void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CF
         flat_array[i * 7 + j] = chord_array_[i][j];
   }
 
-  SU2_MPI::Bcast(flat_array.data(), flat_array.size(), MPI_DOUBLE, 0, SU2_MPI::GetComm());
+  SU2_MPI::Bcast(flat_array.data(), flat_array.size(), MPI_DOUBLE,
+                 0, SU2_MPI::GetComm());
 
   if (rank != MASTER_NODE)
   {
@@ -2296,6 +2302,7 @@ void CSurfaceMovement::getRotationPoint(CGeometry* geometry, CConfig* config, CF
     delete[] recv_counts;
     delete[] displs;
   }
+
   // Set N_out (number of slices) to M
   N_out = M;
   // some return place holder
