@@ -4601,22 +4601,68 @@ bool CEulerSolver::FixedCL_Convergence(CConfig* config, bool convergence) {
       /* --- C_L is not converged to target value and some iterations
           have passed since last update, so update AoA --- */
 
+      // else if ((curr_iter - Iter_Update_AoA) > config->GetStartConv_Iter()){
+      //   Iter_Update_AoA = curr_iter;
+      //   fixed_cl_conv = false;
+      //   if (fabs(TotalCoeff.CL-Target_CL) > (config->GetCauchy_Eps()/2)) {
+      //     AoA_inc = (1.0/dCL_dAlpha)*(Target_CL - TotalCoeff.CL);
+      //   }
+      // }
+
       else if ((curr_iter - Iter_Update_AoA) > config->GetStartConv_Iter()){
         Iter_Update_AoA = curr_iter;
         fixed_cl_conv = false;
-        if (fabs(TotalCoeff.CL-Target_CL) > (config->GetCauchy_Eps()/2)) {
-          AoA_inc = (1.0/dCL_dAlpha)*(Target_CL - TotalCoeff.CL);
+        if (fabs(TotalCoeff.CL-Target_CL) > (config->GetCauchy_Eps()/2.0)) {
+          
+          // 1. Calculate raw step using su2double
+          su2double raw_AoA_inc = (1.0/dCL_dAlpha)*(Target_CL - TotalCoeff.CL);
+          
+          // 2. Under-Relaxation (Damping)
+          su2double relaxation_factor = 0.5; 
+          AoA_inc = raw_AoA_inc * relaxation_factor;
+          
+          // 3. Step Limiter (Assumes AoA_inc is applied in radians. 0.0174533 rad = 1.0 deg)
+          su2double max_step = 0.174533; 
+          
+          if (AoA_inc > max_step) {
+            AoA_inc = max_step;
+          } else if (AoA_inc < -max_step) {
+            AoA_inc = -max_step;
+          }
         }
       }
     }
 
     /* --- If the iteration limit between AoA updates is met, so update AoA --- */
 
-    else if ((curr_iter - Iter_Update_AoA) == config->GetUpdate_AoA_Iter_Limit()) {
+    // else if ((curr_iter - Iter_Update_AoA) == config->GetUpdate_AoA_Iter_Limit()) {
+    //   Iter_Update_AoA = curr_iter;
+    //   fixed_cl_conv = false;
+    //   if (fabs(TotalCoeff.CL-Target_CL) > (config->GetCauchy_Eps()/2)) {
+    //     AoA_inc = (1.0/dCL_dAlpha)*(Target_CL - TotalCoeff.CL);
+    //   }
+    // }
+
+    else if ((curr_iter - Iter_Update_AoA) > config->GetStartConv_Iter()){
       Iter_Update_AoA = curr_iter;
       fixed_cl_conv = false;
-      if (fabs(TotalCoeff.CL-Target_CL) > (config->GetCauchy_Eps()/2)) {
-        AoA_inc = (1.0/dCL_dAlpha)*(Target_CL - TotalCoeff.CL);
+      if (fabs(TotalCoeff.CL-Target_CL) > (config->GetCauchy_Eps()/2.0)) {
+        
+        // 1. Calculate raw step using su2double
+        su2double raw_AoA_inc = (1.0/dCL_dAlpha)*(Target_CL - TotalCoeff.CL);
+        
+        // 2. Under-Relaxation (Damping)
+        su2double relaxation_factor = 0.5; 
+        AoA_inc = raw_AoA_inc * relaxation_factor;
+        
+        // 3. Step Limiter (Assumes AoA_inc is applied in radians. 0.0174533 rad = 1.0 deg)
+        su2double max_step = 0.174533; 
+        
+        if (AoA_inc > max_step) {
+          AoA_inc = max_step;
+        } else if (AoA_inc < -max_step) {
+          AoA_inc = -max_step;
+        }
       }
     }
 
